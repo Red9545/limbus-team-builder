@@ -1,0 +1,3561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>边狱巴士配队模拟器</title>
+<style>
+/* ===== 全局变量与重置 ===== */
+:root {
+  --bg-dark: #1a1410;
+  --bg-card: #2a2018;
+  --bg-card-hover: #352a20;
+  --border-gold: #8b7355;
+  --border-gold-light: #b8a07a;
+  --text-primary: #e8dcc8;
+  --text-secondary: #a89880;
+  --text-muted: #6b5d4d;
+  --accent-gold: #d4a853;
+  --accent-red: #c44040;
+  --accent-green: #4a8c5c;
+  --slot-active: rgba(74, 140, 92, 0.08);
+  --slot-support: rgba(180, 140, 60, 0.08);
+  --sin-wrath: #e05050;
+  --sin-lust: #e08840;
+  --sin-sloth: #e0c040;
+  --sin-gluttony: #5ab050;
+  --sin-gloom: #30b0a0;
+  --sin-pride: #4090d0;
+  --sin-envy: #9050c0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  min-height: 100vh;
+  min-width: 1100px;
+  overflow-x: auto;
+}
+body.custom-bg {
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+body.custom-bg::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 10, 0.82);
+  z-index: -1;
+}
+
+/* ===== 顶部栏 ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, rgba(42,32,24,0.95), rgba(26,20,16,0.9));
+  border-bottom: 1px solid var(--border-gold);
+}
+.topbar-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 2px;
+}
+.topbar-actions { display: flex; gap: 8px; align-items: center; }
+.btn {
+  padding: 6px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.btn:hover { background: var(--bg-card-hover); border-color: var(--border-gold-light); }
+.btn.active { background: var(--accent-gold); color: #1a1410; border-color: var(--accent-gold); }
+.btn-sm { padding: 3px 8px; font-size: 12px; }
+.btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
+.btn-danger:hover { background: rgba(196,64,64,0.15); }
+
+/* ===== 资源统计条 ===== */
+.resource-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 20px;
+  background: rgba(42,32,24,0.6);
+  border-bottom: 1px solid rgba(139,115,85,0.4);
+  flex-wrap: wrap;
+}
+.resource-group { display: flex; align-items: center; gap: 10px; }
+.resource-group-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border-gold);
+  padding-right: 12px;
+}
+.resource-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+.sin-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1410;
+  flex-shrink: 0;
+}
+.sin-icon.wrath { background: var(--sin-wrath); }
+.sin-icon.lust { background: var(--sin-lust); }
+.sin-icon.sloth { background: var(--sin-sloth); }
+.sin-icon.gluttony { background: var(--sin-gluttony); }
+.sin-icon.gloom { background: var(--sin-gloom); }
+.sin-icon.pride { background: var(--sin-pride); }
+.sin-icon.envy { background: var(--sin-envy); }
+.resource-count { font-weight: 600; min-width: 16px; text-align: center; }
+.resource-count.zero { color: var(--text-muted); }
+
+/* ===== 主布局 ===== */
+.main-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 0;
+  min-height: calc(100vh - 100px);
+}
+
+/* ===== 左侧编队区 ===== */
+.team-panel {
+  border-right: 1px solid var(--border-gold);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.team-section-label {
+  font-size: 13px;
+  color: var(--accent-gold);
+  font-weight: 600;
+  padding: 4px 0;
+  letter-spacing: 1px;
+}
+.slot {
+  position: relative;
+  min-height: 72px;
+  border: 1px dashed var(--border-gold);
+  background: var(--slot-active);
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.slot.support { background: var(--slot-support); }
+.slot:hover { border-color: var(--border-gold-light); background: var(--bg-card-hover); }
+.slot.drag-over { border-color: var(--accent-gold); background: rgba(212,168,83,0.15); }
+.slot-number {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.slot-empty-text {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.slot-persona { display: flex; align-items: center; gap: 10px; width: 100%; }
+.slot-star {
+  font-size: 12px;
+  color: var(--accent-gold);
+  font-weight: 700;
+  min-width: 28px;
+}
+.slot-info { flex: 1; min-width: 0; }
+.slot-series {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.slot-title { font-size: 11px; color: var(--text-secondary); }
+.slot-sins { display: flex; gap: 3px; margin-top: 3px; }
+.slot-remove {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.slot:hover .slot-remove { opacity: 1; }
+.slot-remove:hover { color: var(--accent-red); }
+
+/* ===== 右侧人格库 ===== */
+.library-panel {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.library-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+.library-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.library-back:hover { color: var(--accent-gold); }
+.library-back.show { display: flex; }
+.library-current-role { font-size: 14px; color: var(--text-primary); }
+
+/* 筛选器 */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: rgba(42,32,24,0.5);
+  border: 1px solid rgba(139,115,85,0.3);
+}
+.filter-select {
+  padding: 4px 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.filter-label { font-size: 12px; color: var(--text-muted); }
+.filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.filter-row-title { margin-top: 4px; }
+.filter-row-toggles { margin-left: 4px; }
+.filter-label-title { color: var(--accent-gold); font-weight: bold; letter-spacing: 2px; }
+.filter-toggles { display: flex; gap: 4px; flex-wrap: wrap; }
+.filter-toggle {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border-gold);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 2px;
+}
+.filter-toggle.active { background: var(--accent-gold); color: #1a1410; border-color: var(--accent-gold); }
+.filter-mode-group { display: flex; gap: 4px; }
+.filter-mode-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border-gold);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.filter-mode-btn.active { background: var(--bg-card-hover); color: var(--accent-gold); border-color: var(--accent-gold); }
+
+/* 罪人网格 */
+.sinners-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 240px);
+  justify-content: flex-start;
+  align-content: flex-start;
+  gap: 12px;
+  flex: 1;
+  overflow-x: auto;
+}
+.sinner-card {
+  border: 1px solid var(--border-gold);
+  background: var(--bg-card);
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.sinner-card:hover { background: var(--bg-card-hover); border-color: var(--border-gold-light); transform: translateY(-1px); }
+.sinner-card.has-persona { border-color: var(--accent-gold); padding: 12px 12px 10px; }
+/* 已编入标签：上场(1-7)黄 / 候补(8-12)青 */
+.slot-badge.team-badge-active { background: #FFEB00; color: #1a120b; }
+.slot-badge.team-badge-bench { background: #73F5EB; color: #001a17; }
+.sinner-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.sinner-count { font-size: 12px; color: var(--text-muted); }
+.sinner-persona-preview { font-size: 11px; color: var(--accent-gold); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sinner-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.ego-config-btn { padding: 2px 6px; font-size: 10px; }
+.ego-modal { max-width: 1240px; width: 95%; max-height: 92vh; overflow-y: auto; }
+.ego-slots-bar { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.ego-slot { border: 1px solid var(--border-gold); padding: 8px 12px; border-radius: 4px; min-width: 170px; flex: 1; }
+.ego-slot-label { font-size: 11px; font-weight: 700; margin-bottom: 2px; }
+.ego-slot-value { font-size: 13px; color: var(--text-primary); margin-bottom: 4px; }
+.ego-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; }
+.ego-groups { display: flex; flex-direction: column; gap: 14px; }
+.ego-group { border-top: 1px dashed rgba(139,115,85,0.5); padding-top: 10px; }
+.ego-group-title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+.ego-group-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.ego-card { border: 1px solid var(--border-gold); background: var(--bg-card); padding: 10px; border-radius: 4px; position: relative; }
+.ego-card.equipped { border-color: var(--accent-gold); }
+.ego-card-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ego-rarity { font-size: 10px; font-weight: 700; padding: 1px 5px; border: 1px solid currentColor; border-radius: 3px; }
+.ego-name { font-size: 13px; font-weight: 600; }
+.ego-equipped-badge { font-size: 9px; color: var(--accent-gold); border: 1px solid var(--accent-gold); padding: 0 4px; border-radius: 2px; }
+.ego-row { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-bottom: 4px; color: #d8c9a8; flex-wrap: wrap; }
+.ego-passive { color: #e8dcc8; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+.ego-afford { font-size: 11px; margin-top: 6px; padding: 3px 6px; border-radius: 3px; }
+.ego-afford.ok { color: #5ab050; background: rgba(90,176,80,0.12); }
+.ego-afford.fail { color: #e05050; background: rgba(224,80,80,0.12); }
+.ego-afford.warn { color: #e0c040; background: rgba(224,192,64,0.12); }
+.ego-card-actions { display: flex; gap: 6px; margin-top: 8px; }
+.ego-cost-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+.sinner-persona-detail { margin-top: 6px; border-top: 1px solid rgba(139,115,85,0.4); padding-top: 6px; text-align: left; display: flex; gap: 8px; }
+.mini-persona-wrap { flex: 1; min-width: 0; }
+.mini-ego-pane { border-left: 1px solid rgba(139,115,85,0.6); padding-left: 8px; min-width: 104px; flex-shrink: 0; }
+.mini-ego-title { font-size: 9px; color: var(--text-muted); margin-bottom: 3px; }
+.mini-ego-item { margin-bottom: 5px; }
+.mini-ego-rarity { font-size: 9px; font-weight: 700; }
+.mini-ego-name { font-size: 10px; color: #d8c9a8; white-space: normal; word-break: break-word; }
+.mini-persona { font-size: 11px; }
+.mini-persona .persona-skill { font-size: 10px; }
+.mini-persona .effect-tag { font-size: 9px; }
+.mini-persona .passive-type-tag { font-size: 8px; }
+.passive-row.support-row .support-prefix { color: #e8dcc8; }
+.detail-row .value.detail-support { color: #e8dcc8; }
+.passive-note { font-size: 10px; color: #e8dcc8; white-space: pre-wrap; word-break: break-word; margin-top: 3px; border-top: 1px dashed rgba(139,115,85,0.35); padding-top: 3px; }
+.support-note { margin-top: 2px; border-top: none; padding-top: 0; }
+.sinner-card { display: flex; flex-direction: column; align-items: stretch; }
+
+.slot-badge { display: inline-block; background: var(--accent-gold); color: #1a120b; font-weight: 600; font-size: 10px; border-radius: 3px; padding: 1px 5px; margin-right: 4px; vertical-align: 1px; }
+
+
+/* 人格列表 */
+.personas-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  flex: 1;
+  align-content: start;
+  overflow-y: auto;
+}
+.persona-card {
+  border: 1px solid var(--border-gold);
+  background: var(--bg-card);
+  padding: 10px;
+  cursor: grab;
+  transition: all 0.15s;
+  position: relative;
+  color: var(--text-primary);
+}
+.persona-card:hover { background: var(--bg-card-hover); border-color: var(--border-gold-light); }
+.persona-card:active { cursor: grabbing; }
+.persona-card.in-team { border-color: var(--accent-gold); opacity: 0.7; }
+.persona-card.in-team::after {
+  content: '已编入';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 10px;
+  color: var(--accent-gold);
+}
+.persona-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.persona-star { font-size: 12px; color: var(--accent-gold); font-weight: 700; }
+.persona-series { font-size: 13px; font-weight: 600; }
+.persona-title { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+.persona-skills { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.persona-guard {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: #d8c9a8;
+}
+.skill-label { color: #5aa0d8; }
+.skill-sin-checks { display: flex; flex-wrap: wrap; gap: 5px; }
+.sin-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 7px;
+  border: 1px solid rgba(139,115,85,0.4);
+  border-radius: 3px;
+  background: rgba(139,115,85,0.15);
+  user-select: none;
+  transition: all 0.12s;
+}
+.sin-check:hover { border-color: var(--border-gold-light); }
+.sin-check.checked { border-color: var(--accent-gold); background: rgba(200,170,90,0.18); }
+.sin-check input { display: none; }
+.sin-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.guard-label {
+  font-size: 9px;
+  padding: 0 4px;
+  border: 1px solid var(--border-gold);
+  color: var(--accent-gold);
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.persona-skill {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #d8c9a8;
+  white-space: nowrap;
+}
+.skill-no { font-size: 9px; color: #5aa0d8; min-width: 16px; font-weight: 600; }
+.persona-effects { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 4px; }
+.effect-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  background: rgba(139,115,85,0.2);
+  border: 1px solid rgba(139,115,85,0.4);
+  color: var(--text-secondary);
+  border-radius: 2px;
+}
+.custom-options-grid {
+  display: grid;
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 2px;
+}
+.opt-drag-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: rgba(139,115,85,0.2);
+  border: 1px solid rgba(139,115,85,0.4);
+  border-radius: 3px;
+  cursor: grab;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+}
+.opt-drag-item:hover { border-color: var(--accent-gold-light); box-shadow: 0 0 6px rgba(212,168,83,0.3); }
+.opt-drag-item.opt-selected { border-color: var(--accent-gold); background: rgba(212,168,83,0.28); box-shadow: 0 0 8px rgba(212,168,83,0.45); }
+.opt-name { color: var(--text-secondary); }
+.persona-passives { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.passive-row { display: flex; align-items: center; gap: 4px; color: #d8c9a8; }
+.passive-type-tag {
+  font-size: 9px;
+  padding: 0 4px;
+  border: 1px solid var(--border-gold);
+  color: var(--text-secondary);
+  border-radius: 2px;
+  min-width: 32px;
+  text-align: center;
+}
+.passive-type-tag.resonance { border-color: var(--sin-gloom); color: var(--sin-gloom); }
+.passive-type-tag.owned { border-color: var(--sin-gluttony); color: var(--sin-gluttony); }
+.passive-type-tag.constant { border-color: var(--text-muted); color: var(--text-muted); }
+.passive-type-tag.pending { border-color: var(--accent-red); color: var(--accent-red); border-style: dashed; }
+
+/* ===== 底部判定区 ===== */
+.judgment-panel {
+  border-top: 1px solid var(--border-gold);
+  padding: 12px 20px;
+  background: rgba(26,20,16,0.9);
+}
+.judgment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.judgment-title { font-size: 15px; font-weight: 700; color: var(--accent-gold); }
+.judgment-mode-group { display: flex; gap: 4px; }
+.judgment-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.judgment-column h4 {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(139,115,85,0.3);
+}
+.judgment-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(139,115,85,0.1);
+}
+.judgment-slot-num {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.judgment-persona { flex: 1; min-width: 0; }
+.judgment-persona-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.judgment-passive-info { font-size: 11px; color: var(--text-muted); }
+.judgment-result { display: flex; gap: 8px; flex-shrink: 0; }
+.judgment-result-a, .judgment-result-b, .judgment-result-c, .judgment-result-d {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  min-width: 70px;
+  text-align: center;
+}
+.result-ok { background: rgba(74,140,92,0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+.result-warn { background: rgba(212,168,83,0.2); color: var(--accent-gold); border: 1px solid var(--accent-gold); }
+.result-fail { background: rgba(196,64,64,0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+.result-pending { background: rgba(139,115,85,0.1); color: var(--text-muted); border: 1px dashed var(--border-gold); }
+.judgment-empty { color: var(--text-muted); font-size: 12px; padding: 8px 0; }
+
+/* ===== 模态框 ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-wide { max-width: 1100px; width: 94%; }
+.split-pane { display: flex; align-items: flex-start; flex-wrap: nowrap; }
+.split-col { flex: 1 1 0; min-width: 0; }
+.split-col-l { margin-right: 12px; }
+.split-col-r { margin-left: 12px; }
+.split-divider { width: 1px; flex: 0 0 1px; align-self: stretch; background: var(--border-gold); }
+.modal h3 { color: var(--accent-gold); margin-bottom: 16px; font-size: 18px; }
+.modal-close {
+  float: right;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--text-primary); }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%;
+  padding: 6px 10px;
+  background: #3d2b1f;
+  border: 1px solid #8b6914;
+  color: #e8d5b7;
+  font-family: inherit;
+  font-size: 13px;
+}
+input:focus, .form-group select:focus, .form-group textarea:focus {
+  outline: none;
+  border-color: #c9a84c;
+  box-shadow: 0 0 4px rgba(201,168,76,0.3);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+/* 设置面板 */
+.settings-section { margin-bottom: 20px; }
+.settings-section h4 { font-size: 14px; color: var(--accent-gold); margin-bottom: 10px; padding-bottom: 4px; border-bottom: 1px solid rgba(139,115,85,0.3); }
+.bg-presets { display: flex; gap: 8px; flex-wrap: wrap; }
+.bg-preset {
+  width: 60px;
+  height: 40px;
+  border: 2px solid var(--border-gold);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bg-preset:hover, .bg-preset.active { border-color: var(--accent-gold); }
+.bg-preset.dark { background: linear-gradient(135deg, #1a1410, #2a2018); }
+.bg-preset.parchment { background: linear-gradient(135deg, #3a2e22, #4a3a2a); }
+.bg-preset.night { background: linear-gradient(135deg, #0f1419, #1a2332); }
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.icon-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(139,115,85,0.3);
+  font-size: 12px;
+}
+.icon-item input[type="file"] { display: none; }
+.icon-upload-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-gold);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.custom-icon-preview { width: 20px; height: 20px; object-fit: contain; }
+
+/* 预设阵容 */
+.preset-list { display: flex; flex-direction: column; gap: 6px; }
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid rgba(139,115,85,0.3);
+  background: var(--bg-dark);
+}
+.preset-item-name { font-size: 13px; }
+.preset-item-actions { display: flex; gap: 4px; }
+
+/* 详情弹窗 */
+.detail-modal .modal { max-width: 500px; }
+.detail-section { margin-bottom: 12px; }
+.detail-section h5 { font-size: 13px; color: var(--accent-gold); margin-bottom: 6px; }
+.detail-row { display: flex; font-size: 12px; padding: 2px 0; }
+.detail-row .label { width: 80px; color: var(--text-muted); flex-shrink: 0; }
+.detail-row .value { flex: 1; color: var(--text-primary); }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-dark); }
+::-webkit-scrollbar-thumb { background: var(--border-gold); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-gold-light); }
+
+/* ===== 可搜索下拉框 ===== */
+.searchable-select {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+.searchable-input {
+  background: #3d2b1f;
+  border: 1px solid #8b6914;
+  color: #e8d5b7;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.searchable-input:focus {
+  border-color: #c9a84c;
+  outline: none;
+}
+.searchable-input {
+  cursor: text !important;
+}
+.searchable-input::placeholder {
+  color: #8b7355;
+}
+.searchable-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #2a1f15;
+  border: 1px solid #8b6914;
+  border-radius: 0 0 4px 4px;
+  z-index: 2000;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+.searchable-dropdown.open {
+  display: block;
+}
+.searchable-option {
+  padding: 7px 10px;
+  cursor: pointer;
+  color: #e8d5b7;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.searchable-option:hover {
+  background: #3d2b1f;
+  color: #c9a84c;
+}
+.searchable-option.selected {
+  background: #4a3525;
+  color: #c9a84c;
+  font-weight: bold;
+}
+.searchable-option.empty {
+  color: #8b7355;
+  cursor: default;
+  font-style: italic;
+}
+.searchable-option.empty:hover {
+  background: transparent;
+  color: #8b7355;
+}
+/* 筛选区的可搜索下拉框宽度适配 */
+.filter-select-wrap {
+  display: inline-block;
+  min-width: 100px;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部栏 ===== -->
+<div class="topbar">
+  <div class="topbar-title">边狱巴士配队模拟器</div>
+  <div class="topbar-actions">
+    <select class="filter-select" id="presetSelect" onchange="loadPreset(this.value)">
+      <option value="">预设阵容...</option>
+    </select>
+    <button class="btn btn-sm" onclick="savePresetDialog()">保存阵容</button>
+    <button class="btn btn-sm" onclick="resetAddPersonaForm(); openModal('addPersonaModal')">新增人格</button>
+    <button class="btn btn-sm" onclick="openModal('settingsModal')">设置</button>
+    <button class="btn btn-sm" onclick="clearTeam()">清空</button>
+  </div>
+</div>
+
+<!-- ===== 资源统计条 ===== -->
+<div class="resource-bar" id="resourceBar"></div>
+
+<!-- ===== 主布局 ===== -->
+<div class="main-layout">
+  <!-- 左侧编队区 -->
+  <div class="team-panel" id="teamPanel"></div>
+
+  <!-- 右侧人格库 -->
+  <div class="library-panel">
+    <div class="library-header">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="library-title" id="libraryTitle">人格库</div>
+        <div class="sort-btn-group" id="sortBtnGroup">
+          <button class="sort-btn active" onclick="setSortOrder('star_asc')">稀有度↑</button>
+          <button class="sort-btn" onclick="setSortOrder('star_desc')">稀有度↓</button>
+        </div>
+        <div class="library-back" id="libraryBack" onclick="backToSinners()">
+          <span>&larr;</span> 返回罪人列表
+        </div>
+        <div class="library-current-role" id="libraryCurrentRole"></div>
+        <button class="btn" style="padding:3px 10px;font-size:12px;margin-left:auto;" onclick="openOptionsManager()">管理选项</button>
+        <button class="btn btn-sm" style="padding:3px 10px;font-size:12px;" onclick="resetTeamAndEgos()" title="清空上场/候补区所有人格及所有已装备EGO">重置</button>
+      </div>
+    </div>
+
+    <!-- 筛选器 -->
+    <div class="filters" id="filters">
+      <div class="filter-row">
+        <span class="filter-label">系列</span>
+        <select class="filter-select" id="filterSeries" onchange="renderPersonas()"><option value="">全部</option></select>
+        <span class="filter-label">星级</span>
+        <select class="filter-select" id="filterStar" onchange="renderPersonas()">
+          <option value="">全部</option>
+          <option value="O">O</option>
+          <option value="OO">OO</option>
+          <option value="OOO">OOO</option>
+        </select>
+        <span class="filter-label">罪孽</span>
+        <select class="filter-select" id="filterSin" onchange="renderPersonas()"><option value="">全部</option></select>
+        <button class="btn btn-sm" style="padding:2px 10px;font-size:11px;margin-left:auto;" onclick="resetFilters()" title="重置所有筛选（系列/星级/罪孽/异常/特殊/被动类型与资源/交集并集）">重置筛选</button>
+      </div>
+      <div class="filter-row filter-row-title"><span class="filter-label filter-label-title">异常</span></div>
+      <div class="filter-row filter-row-toggles"><div class="filter-toggles" id="filterEffectToggles"></div></div>
+      <div class="filter-row filter-row-title"><span class="filter-label filter-label-title">特殊</span></div>
+      <div class="filter-row filter-row-toggles"><div class="filter-toggles" id="filterSpecialToggles"></div></div>
+      <div class="filter-row">
+        <span class="filter-label">战斗被动</span>
+        <select class="filter-select" id="filterPassiveType" onchange="renderPersonas()">
+          <option value="">全部</option>
+          <option value="共鸣">共鸣</option>
+          <option value="持有">持有</option>
+          <option value="常时">常时</option>
+          <option value="pending">待标注</option>
+        </select>
+        <span class="filter-label">战斗被动资源</span>
+        <select class="filter-select" id="filterPassiveSin" onchange="renderPersonas()"><option value="">全部</option></select>
+        <span class="filter-label">支援被动</span>
+        <select class="filter-select" id="filterSupportType" onchange="renderPersonas()">
+          <option value="">全部</option>
+          <option value="共鸣">共鸣</option>
+          <option value="持有">持有</option>
+          <option value="常时">常时</option>
+          <option value="pending">待标注</option>
+        </select>
+        <span class="filter-label">支援被动资源</span>
+        <select class="filter-select" id="filterSupportSin" onchange="renderPersonas()"><option value="">全部</option></select>
+        <div class="filter-mode-group">
+          <button class="filter-mode-btn active" id="modeIntersection" onclick="setFilterMode('intersection')">交集</button>
+          <button class="filter-mode-btn" id="modeUnion" onclick="setFilterMode('union')">并集</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 人格库内容 -->
+    <div class="sinners-grid" id="sinnersGrid"></div>
+    <div class="personas-list" id="personasList" style="display:none;"></div>
+    <div class="egos-page" id="egosPage" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- ===== 底部判定区 ===== -->
+<div class="judgment-panel">
+  <div class="judgment-header">
+    <div class="judgment-title">被动判定 <span style="font-size:11px;color:var(--text-muted);font-weight:normal;">（被动类型/数量待标注时显示"待标注"，点击人格卡片→编辑此人格可标注；多回合判定：C=运气最好（每回合最多产出=持有该罪孽的人数，含守备，不考虑概率）；D=P自动期望（技能Ⅰ×3/Ⅱ×2/Ⅲ×1 抽2施放1，不主动使用守备）；多资源按先后累加回合；某罪孽无法产出（C:持有该罪孽的人数为0 / D:抽取期望为0）才判无法触发，其余按回合数）</span></div>
+    <div class="judgment-mode-group">
+      <button class="filter-mode-btn" id="judgeA" onclick="setJudgmentMode('A')">A 人数</button>
+      <button class="filter-mode-btn" id="judgeB" onclick="setJudgmentMode('B')">B 卡牌总数</button>
+      <button class="filter-mode-btn active" id="judgeBoth" onclick="setJudgmentMode('both')">同时显示</button>
+      <span class="filter-label" style="margin-left:10px;">多回合</span>
+      <button class="filter-mode-btn active" id="judgeC" onclick="toggleJudgeCD('C')" title="运气最好：每回合最多产出=持有该罪孽的人数(含守备)，不考虑概率">C 运气最好</button>
+      <button class="filter-mode-btn active" id="judgeD" onclick="toggleJudgeCD('D')" title="P自动期望：按抽卡期望(技能Ⅰ×3/Ⅱ×2/Ⅲ×1抽2施放1，不主动用守备)">D 期望</button>
+    </div>
+  </div>
+  <div class="judgment-columns">
+    <div class="judgment-column">
+      <h4>上场被动 (1-7)</h4>
+      <div id="activeJudgments"></div>
+    </div>
+    <div class="judgment-column">
+      <h4>候补支援被动 (8-12)</h4>
+      <div id="supportJudgments"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 新增人格模态框 ===== -->
+<div class="modal-overlay" id="addPersonaModal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('addPersonaModal')">&times;</button>
+    <h3 id="addPersonaTitle">新增人格</h3>
+    <div class="split-pane">
+      <!-- 左栏 -->
+      <div class="split-col split-col-l">
+        <div class="form-row">
+          <div class="form-group">
+            <label>角色</label>
+            <select id="newRole"></select>
+          </div>
+          <div class="form-group">
+            <label>星级 (O/OO/OOO)</label>
+            <input type="text" id="newStar" placeholder="OOO">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>系列一</label>
+            <select id="newSeries1"></select>
+          </div>
+          <div class="form-group">
+            <label>系列二</label>
+            <select id="newSeries2"></select>
+          </div>
+          <div class="form-group">
+            <label>系列三</label>
+            <select id="newSeries3"></select>
+          </div>
+          <div class="form-group">
+            <label>职务 (同阵容区分)</label>
+            <input type="text" id="newTitle" placeholder="可选">
+          </div>
+        </div>
+        <div class="form-row" style="align-items:flex-start;">
+          <!-- 左列：战斗被动 -->
+          <div class="form-group" style="flex:1;margin-right:8px;">
+            <label>战斗被动类型</label>
+            <select id="newPassiveType">
+              <option value="">待标注</option>
+              <option value="共鸣">共鸣</option>
+              <option value="持有">持有</option>
+              <option value="常时">常时</option>
+            </select>
+            <label style="margin-top:10px;">战斗 罪孽一</label>
+            <select id="newPassiveSin1"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newPassiveCount1" placeholder="如 3">
+            <label style="margin-top:10px;">战斗 罪孽二</label>
+            <select id="newPassiveSin2"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newPassiveCount2">
+            <label style="margin-top:10px;">战斗 罪孽三</label>
+            <select id="newPassiveSin3"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newPassiveCount3">
+          </div>
+          <!-- 右列：支援被动 -->
+          <div class="form-group" style="flex:1;margin-left:8px;">
+            <label>支援被动类型</label>
+            <select id="newSupportType">
+              <option value="">待标注</option>
+              <option value="共鸣">共鸣</option>
+              <option value="持有">持有</option>
+              <option value="常时">常时</option>
+            </select>
+            <label style="margin-top:10px;">支援 罪孽一</label>
+            <select id="newSupportSin1"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newSupportCount1" placeholder="如 3">
+            <label style="margin-top:10px;">支援 罪孽二</label>
+            <select id="newSupportSin2"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newSupportCount2">
+            <label style="margin-top:10px;">支援 罪孽三</label>
+            <select id="newSupportSin3"></select>
+            <label style="margin-top:6px;">数量</label>
+            <input type="number" id="newSupportCount3">
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label>战斗被动效果说明</label>
+          <textarea id="newPassiveEffect" rows="2" placeholder="战斗被动效果描述"></textarea>
+        </div>
+        <div class="form-group" style="margin-top:10px;">
+          <label>支援被动效果</label>
+          <textarea id="newSupportEffect" rows="2" placeholder="支援被动效果描述"></textarea>
+        </div>
+      </div>
+
+      <!-- 中间分隔线 -->
+      <div class="split-divider"></div>
+
+      <!-- 右栏 -->
+      <div class="split-col split-col-r">
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 120px;">
+            <label class="skill-label">Ⅰ技能 类型</label>
+            <select id="newSkill1Type"></select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="skill-label">Ⅰ技能 罪孽（可复选，最多7种）</label>
+            <div class="skill-sin-checks" id="newSkill1SinsBox"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 120px;">
+            <label class="skill-label">Ⅱ技能 类型</label>
+            <select id="newSkill2Type"></select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="skill-label">Ⅱ技能 罪孽（可复选，最多7种）</label>
+            <div class="skill-sin-checks" id="newSkill2SinsBox"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 120px;">
+            <label class="skill-label">Ⅲ技能 类型</label>
+            <select id="newSkill3Type"></select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="skill-label">Ⅲ技能 罪孽（可复选，最多7种）</label>
+            <div class="skill-sin-checks" id="newSkill3SinsBox"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:0 0 120px;">
+            <label class="skill-label">守备技能 类型</label>
+            <select id="newGuardType">
+              <option value="">无</option>
+              <option value="防御">防御</option>
+              <option value="闪避">闪避</option>
+              <option value="反击">反击</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="skill-label">守备技能 罪孽（可复选，最多7种）</label>
+            <div class="skill-sin-checks" id="newGuardSinsBox"></div>
+          </div>
+        </div>
+        <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;align-items:start;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="form-group">
+              <label>攻击附带效果1</label>
+              <select id="newEffect1"></select>
+            </div>
+            <div class="form-group">
+              <label>攻击附带效果2</label>
+              <select id="newEffect2"></select>
+            </div>
+            <div class="form-group">
+              <label>攻击附带效果3</label>
+              <select id="newEffect3"></select>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="form-group">
+              <label>攻击附带效果4</label>
+              <select id="newEffect4"></select>
+            </div>
+            <div class="form-group">
+              <label>攻击附带效果5</label>
+              <select id="newEffect5"></select>
+            </div>
+            <div class="form-group">
+              <label>攻击附带效果6</label>
+              <select id="newEffect6"></select>
+            </div>
+          </div>
+        </div>
+        <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;align-items:start;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="form-group">
+              <label>特殊效果1</label>
+              <select id="newSpecial"></select>
+            </div>
+            <div class="form-group">
+              <label>特殊效果2</label>
+              <select id="newSpecial2"></select>
+            </div>
+            <div class="form-group">
+              <label>特殊效果3</label>
+              <select id="newSpecial3"></select>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="form-group">
+              <label>特殊效果4</label>
+              <select id="newSpecial4"></select>
+            </div>
+            <div class="form-group">
+              <label>特殊效果5</label>
+              <select id="newSpecial5"></select>
+            </div>
+            <div class="form-group">
+              <label>特殊效果6</label>
+              <select id="newSpecial6"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="delete-btn" id="deletePersonaBtn" style="display:none;" onclick="deletePersona()">删除此人格</button>
+      <button class="btn" onclick="closeModal('addPersonaModal')">取消</button>
+      <button class="btn active" id="addPersonaSubmitBtn" onclick="addPersona()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 选项管理模态框 ===== -->
+<div class="modal-overlay" id="optionsModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('optionsModal')">&times;</button>
+    <h3>管理下拉选项</h3>
+    <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">在这里添加自定义选项，会出现在编辑人格的下拉框中。默认选项不可删除。</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>选项类型</label>
+        <select id="optType" onchange="renderCustomOptions()">
+          <option value="attackEffects">攻击附带效果</option>
+          <option value="specialEffects">特殊效果</option>
+          <option value="series">系列</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>新选项名称</label>
+        <input type="text" id="optNewName" placeholder="输入新选项">
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end;">
+        <button class="btn active" onclick="addCustomOption()">添加</button>
+      </div>
+    </div>
+    <div class="form-row" style="align-items:center;gap:10px;margin-top:2px;">
+      <button type="button" class="btn btn-sm" onclick="moveSelectedOption(-1)" title="将选中的选项向前移一位">↑ 前移</button>
+      <button type="button" class="btn btn-sm" onclick="moveSelectedOption(1)" title="将选中的选项向后移一位">↓ 后移</button>
+      <button type="button" class="btn btn-sm" style="border-color:var(--accent-red);color:var(--accent-red-light);background:rgba(192,80,80,0.12);" onclick="deleteSelectedOption()" title="删除选中的选项">删除</button>
+      <span id="optSelectedHint" style="color:var(--text-muted);font-size:12px;">未选中选项（点击下方选项选中）</span>
+    </div>
+    <div id="customOptionsList" style="max-height:300px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ===== 设置模态框 ===== -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal modal-wide">
+    <button class="modal-close" onclick="closeModal('settingsModal')">&times;</button>
+    <h3>设置</h3>
+
+    <div class="split-pane">
+      <!-- 左栏 -->
+      <div class="split-col split-col-l">
+        <div class="settings-section">
+          <h4>背景</h4>
+          <div class="bg-presets">
+            <div class="bg-preset dark active" onclick="setBg('dark')" title="深色哥特"></div>
+            <div class="bg-preset parchment" onclick="setBg('parchment')" title="羊皮纸"></div>
+            <div class="bg-preset night" onclick="setBg('night')" title="暗夜"></div>
+          </div>
+          <div class="form-group" style="margin-top:10px;">
+            <label>自定义背景图片 URL</label>
+            <input type="text" id="customBgUrl" placeholder="https://...">
+            <button class="btn btn-sm" style="margin-top:6px;" onclick="applyCustomBg()">应用自定义背景</button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>罪孽颜色 (全局生效)</h4>
+          <div class="sin-color-grid" id="sinColorGrid" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-sm" onclick="saveSinColors()">保存颜色</button>
+            <button class="btn btn-sm" onclick="resetSinColors()">恢复默认</button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>全局字体大小</h4>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="btn btn-sm" onclick="changeFontScale(-1)">调小</button>
+            <span id="fontScaleLabel" style="min-width:70px;text-align:center;">默认</span>
+            <button class="btn btn-sm" onclick="changeFontScale(1)">调大</button>
+            <button class="btn btn-sm" onclick="changeFontScale(0)">重置默认</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">可调大10档 / 调小10档，缩放保持界面原有字号比例</div>
+        </div>
+
+        <div class="settings-section">
+          <h4>图标自定义 (点击上传替换)</h4>
+          <div class="icon-grid" id="iconGrid"></div>
+        </div>
+
+        <div class="settings-section">
+          <h4>数据管理</h4>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="exportData()">导出全部数据</button>
+            <button class="btn btn-sm" onclick="document.getElementById('importDataFile').click()">导入数据</button>
+            <input type="file" id="importDataFile" style="display:none;" accept=".json" onchange="importData(event)">
+            <button class="btn btn-sm btn-danger" onclick="resetAll()">重置全部数据</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中间分隔线 -->
+      <div class="split-divider"></div>
+
+      <!-- 右栏 -->
+      <div class="split-col split-col-r">
+        <div class="settings-section">
+          <h4>效果颜色 (与选项管理联动)</h4>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">点击调色板直接选色，保存后全局生效，新添加的效果选项会出现在这里</div>
+          <div id="effectColorGrid" style="display:grid;grid-template-columns:repeat(5,auto);gap:10px;"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="btn btn-sm" onclick="saveEffectColors()">保存颜色</button>
+            <button class="btn btn-sm" onclick="resetEffectColors()">恢复默认色</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn active" onclick="closeModal('settingsModal')">完成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EGO 编辑模态框 ===== -->
+<div class="modal-overlay" id="egoEditModal">
+  <div class="modal" style="max-width:680px;">
+    <button class="modal-close" onclick="closeModal('egoEditModal')">&times;</button>
+    <h3 id="egoEditTitle">编辑 EGO</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>EGO 名称</label>
+        <input type="text" id="newEgoName" placeholder="如 乌瞰刀">
+      </div>
+      <div class="form-group">
+        <label>种类标签</label>
+        <select id="newEgoRarity"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>罪孽属性</label>
+        <select id="newEgoSin"></select>
+      </div>
+      <div class="form-group">
+        <label>攻击类型</label>
+        <select id="newEgoSkillType"></select>
+      </div>
+    </div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="form-group">
+          <label>攻击附带效果 1</label>
+          <select id="newEgoEffect1"></select>
+        </div>
+        <div class="form-group">
+          <label>攻击附带效果 2</label>
+          <select id="newEgoEffect2"></select>
+        </div>
+        <div class="form-group">
+          <label>攻击附带效果 3</label>
+          <select id="newEgoEffect3"></select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="form-group">
+          <label>攻击附带效果 4</label>
+          <select id="newEgoEffect4"></select>
+        </div>
+        <div class="form-group">
+          <label>攻击附带效果 5</label>
+          <select id="newEgoEffect5"></select>
+        </div>
+        <div class="form-group">
+          <label>攻击附带效果 6</label>
+          <select id="newEgoEffect6"></select>
+        </div>
+      </div>
+    </div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 16px;align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="form-group">
+          <label>特殊效果 1</label>
+          <select id="newEgoSpecial"></select>
+        </div>
+        <div class="form-group">
+          <label>特殊效果 2</label>
+          <select id="newEgoSpecial2"></select>
+        </div>
+        <div class="form-group">
+          <label>特殊效果 3</label>
+          <select id="newEgoSpecial3"></select>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div class="form-group">
+          <label>特殊效果 4</label>
+          <select id="newEgoSpecial4"></select>
+        </div>
+        <div class="form-group">
+          <label>特殊效果 5</label>
+          <select id="newEgoSpecial5"></select>
+        </div>
+        <div class="form-group">
+          <label>特殊效果 6</label>
+          <select id="newEgoSpecial6"></select>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>被动效果说明</label>
+      <textarea id="newEgoPassive" rows="2" placeholder="EGO 被动效果描述"></textarea>
+    </div>
+    <div class="form-group">
+      <label>消耗罪孽资源（最多 7 种，每次释放消耗对应数量）</label>
+      <div id="egoCostRows"></div>
+      <button type="button" class="btn btn-sm" onclick="addEgoCostRow()">+ 添加消耗资源</button>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('egoEditModal')">取消</button>
+      <button class="btn active" onclick="saveEgo()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 人格详情模态框 ===== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal detail-modal">
+    <button class="modal-close" onclick="closeModal('detailModal')">&times;</button>
+    <h3 id="detailTitle">人格详情</h3>
+    <div id="detailContent"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('detailModal')">关闭</button>
+      <button class="btn" onclick="addToTeamDirect('active')">编入上场</button>
+      <button class="btn" onclick="addToTeamDirect('support')">编入候补</button>
+      <button class="btn active" onclick="editCurrentPersona()">编辑此人格</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 保存预设模态框 ===== -->
+<div class="modal-overlay" id="savePresetModal">
+  <div class="modal" style="max-width:400px;">
+    <button class="modal-close" onclick="closeModal('savePresetModal')">&times;</button>
+    <h3>保存阵容</h3>
+    <div class="form-group">
+      <label>阵容名称</label>
+      <input type="text" id="presetName" placeholder="如 震颤队">
+    </div>
+    <div class="preset-list" id="presetList" style="margin-top:12px;"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('savePresetModal')">取消</button>
+      <button class="btn active" onclick="savePreset()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 数据 =====
+const SIN_LIST = ['暴怒','色欲','怠惰','暴食','忧郁','傲慢','嫉妒'];
+const DEFAULT_ATTACK_EFFECTS = ['烧伤','流血','震颤','破裂','沉沦','呼吸法','充能'];
+const DEFAULT_SPECIAL_EFFECTS = ['子弹','丢弃','崩坏震颤','出血震颤','锁链震颤','灼热震颤'];
+const SIN_KEYS = ['wrath','lust','sloth','gluttony','gloom','pride','envy'];
+const SIN_MAP = { '暴怒':'wrath','色欲':'lust','怠惰':'sloth','暴食':'gluttony','忧郁':'gloom','傲慢':'pride','嫉妒':'envy' };
+const DEFAULT_SIN_COLORS = { '暴怒':'#e05050','色欲':'#e08840','怠惰':'#e0c040','暴食':'#5ab050','忧郁':'#30b0a0','傲慢':'#4090d0','嫉妒':'#9050c0' };
+const TYPE_LIST = ['斩击','突刺','打击'];
+const ROLE_LIST = ['李箱','浮士德','堂吉诃德','良秀','默尔索','鸿璐','希斯克利夫','以实玛利','罗佳','辛克莱','奥提斯','格里高尔'];
+const EGO_RARITIES = ['ZAYIN','TETH','HE','WAW','ALEPH'];
+const EGO_RARITY_COLORS = { 'ZAYIN':'#9aa5b0','TETH':'#5a8fc0','HE':'#c0a050','WAW':'#a050c0','ALEPH':'#c05050' };
+// 示例 EGO（名称/种类取自游戏，资源与效果留空待编辑）
+const DEFAULT_EGOS = [
+  { id: 'ego_lx_1', role: '李箱', name: '乌瞰刀', rarity: 'ZAYIN', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_2', role: '李箱', name: '往昔', rarity: 'ZAYIN', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_3', role: '李箱', name: '第四根火柴之焰', rarity: 'TETH', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_4', role: '李箱', name: '祈愿石', rarity: 'TETH', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_5', role: '李箱', name: '次元撕裂者', rarity: 'HE', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_6', role: '李箱', name: '庄严哀悼', rarity: 'HE', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_7', role: '李箱', name: '凶弹', rarity: 'HE', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_8', role: '李箱', name: '三千大世界', rarity: 'WAW', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' },
+  { id: 'ego_lx_9', role: '李箱', name: '狐雨', rarity: 'WAW', sin: '', skill_type: '', cost: [], effect: '', special: '', passive: '' }
+];
+
+const DEFAULT_PERSONAS = /*PERSONAS_DATA*/;
+
+// ===== 状态 =====
+let editingPersonaIndex = -1;
+let currentDetailIndex = -1;
+let sortOrder = 'star_asc';
+let state = {
+  team: new Array(12).fill(null),
+  libraryView: 'sinners',
+  currentRole: null,
+  filters: {
+    series: '', star: '', sin: '', effects: [], specialEffects: [],
+    passiveType: '', supportType: '', passiveSin: '', supportSin: '',
+    filterMode: 'intersection'
+  },
+  judgmentMode: 'both',
+  judgeC: true, judgeD: true,
+  settings: { bg: 'dark', customBg: '', icons: {}, sinColors: {}, effectColors: {}, fontScale: 0, guardTriggerRate: 0.5 },
+  presets: [],
+  customPersonas: [],
+  customOptions: { attackEffects: [], specialEffects: [], series: [], hidden: { attackEffects: [], specialEffects: [], series: [] }, order: { attackEffects: [], specialEffects: [], series: [] } },
+  egos: [],
+  personaEgos: {},
+  deletedEgoIds: []
+};
+
+// 从 localStorage 加载
+function loadState() {
+  try {
+    const saved = localStorage.getItem('limbus_team_builder');
+    if (saved) {
+      const data = JSON.parse(saved);
+      state.team = data.team || new Array(12).fill(null);
+      state.settings = data.settings || state.settings;
+      state.presets = data.presets || [];
+      state.customPersonas = data.customPersonas || [];
+      state.customOptions = data.customOptions || { attackEffects: [], specialEffects: [], series: [], hidden: { attackEffects: [], specialEffects: [], series: [] }, order: { attackEffects: [], specialEffects: [], series: [] } };
+      if (!state.customOptions.hidden) state.customOptions.hidden = { attackEffects: [], specialEffects: [], series: [] };
+      if (!state.customOptions.order) state.customOptions.order = { attackEffects: [], specialEffects: [], series: [] };
+      state.judgmentMode = data.judgmentMode || 'both';
+      state.judgeC = data.judgeC !== false;
+      state.judgeD = data.judgeD !== false;
+      state.egos = data.egos || [];
+      state.personaEgos = data.personaEgos || {};
+      state.deletedEgoIds = data.deletedEgoIds || [];
+    }
+    cleanOrderResidue();
+  } catch(e) { console.warn('加载失败', e); }
+}
+function cleanOrderResidue() {
+  // 清理 order 排序数组中的历史残留项（不在默认/自定义列表中的项，早期数据迁移遗留）
+  // 这些残留项会导致列表一直显示却无法删除
+  try {
+    ['attackEffects', 'specialEffects', 'series'].forEach(type => {
+      const orderArr = state.customOptions?.order?.[type];
+      if (!Array.isArray(orderArr)) return;
+      const defaults = type === 'attackEffects' ? DEFAULT_ATTACK_EFFECTS : (type === 'specialEffects' ? DEFAULT_SPECIAL_EFFECTS : []);
+      const customs = state.customOptions[type] || [];
+      let base = [...defaults, ...customs];
+      if (type === 'series') {
+        const set = new Set(base);
+        for (const p of getAllPersonas()) for (const s of (p.series || [])) if (s) set.add(s);
+        base = [...set];
+      }
+      state.customOptions.order[type] = orderArr.filter(o => base.some(b => normOpt(b) === normOpt(o)));
+    });
+  } catch(e) { console.warn('清理顺序残留失败', e); }
+}
+function saveState() {
+  try {
+    localStorage.setItem('limbus_team_builder', JSON.stringify({
+      team: state.team, settings: state.settings,
+      presets: state.presets, customPersonas: state.customPersonas,
+      customOptions: state.customOptions,
+      judgmentMode: state.judgmentMode,
+      judgeC: state.judgeC, judgeD: state.judgeD,
+      egos: state.egos,
+      personaEgos: state.personaEgos,
+      deletedEgoIds: state.deletedEgoIds
+    }));
+  } catch(e) { console.warn('保存失败', e); }
+}
+
+function getAllPersonas() {
+  const result = [...DEFAULT_PERSONAS];
+  for (const p of state.customPersonas) {
+    if (p._defaultIndex !== undefined && p._defaultIndex >= 0 && p._defaultIndex < result.length) {
+      result[p._defaultIndex] = p;
+    } else {
+      result.push(p);
+    }
+  }
+  // 规范化：字符串转数组 + 旧被动格式转新格式
+  for (const p of result) {
+    if (typeof p.series === 'string') p.series = p.series ? [p.series] : [];
+    if (!Array.isArray(p.series)) p.series = [];
+    // 旧格式 passive_sin: [...], passive_count: "3" → 新格式 passive_sins: [{sin, count}]
+    if (!p.passive_sins) {
+      const oldSins = Array.isArray(p.passive_sin) ? p.passive_sin : (p.passive_sin ? [p.passive_sin] : []);
+      const oldCount = parseInt(p.passive_count) || 0;
+      p.passive_sins = oldSins.filter(Boolean).map(s => ({sin: s, count: oldCount}));
+    }
+    if (!p.support_sins) {
+      const oldSins = Array.isArray(p.support_sin) ? p.support_sin : (p.support_sin ? [p.support_sin] : []);
+      const oldCount = parseInt(p.support_count) || 0;
+      p.support_sins = oldSins.filter(Boolean).map(s => ({sin: s, count: oldCount}));
+    }
+  }
+  return result;
+}
+function getAllEgos() {
+  const custom = [...state.egos];
+  const deleted = state.deletedEgoIds || [];
+  const result = DEFAULT_EGOS.map(d => deleted.includes(d.id) ? null : (custom.find(c => c.id === d.id) || d)).filter(Boolean);
+  for (const c of custom) if (!DEFAULT_EGOS.some(d => d.id === c.id)) result.push(c);
+  return result;
+}
+function getEgosByRole(role) { return getAllEgos().filter(e => e.role === role); }
+function getEgoById(id) { return getAllEgos().find(e => e.id === id); }
+function getVisibleOptionsRaw(type) {
+  const defaults = type === 'attackEffects' ? DEFAULT_ATTACK_EFFECTS : (type === 'specialEffects' ? DEFAULT_SPECIAL_EFFECTS : []);
+  const customs = state.customOptions[type] || [];
+  const deleted = state.customOptions?.hidden?.[type] || [];
+  let all;
+  if (type === 'series') {
+    const set = new Set();
+    for (const p of getAllPersonas()) for (const s of (p.series || [])) if (s) set.add(s);
+    for (const s of customs) set.add(s);
+    all = [...set].sort();
+  } else {
+    all = [...defaults, ...customs];
+  }
+  return all.filter(o => !deleted.includes(o));
+}
+function getOrderedOptions(type) {
+  const hidden = state.customOptions?.hidden?.[type] || [];
+  const order = state.customOptions?.order?.[type] || [];
+  const base = getVisibleOptionsRaw(type);
+  if (order && order.length) {
+    // 只保留真实存在于 base 的排序项（过滤历史残留），并去重
+    const seen = new Set();
+    const known = [];
+    for (const o of order) {
+      const n = normOpt(o);
+      if (!hidden.includes(o) && base.some(b => normOpt(b) === n) && !seen.has(n)) {
+        seen.add(n);
+        known.push(o);
+      }
+    }
+    return [...known, ...base.filter(o => !seen.has(normOpt(o)))];
+  }
+  return base;
+}
+function getAttackEffectOptions() {
+  return getOrderedOptions('attackEffects');
+}
+function getSpecialEffectOptions() {
+  return getOrderedOptions('specialEffects');
+}
+function getSeriesOptions() {
+  return getOrderedOptions('series');
+}
+function getAllSeriesOptionsRaw() {
+  // 不过滤隐藏，用于选项管理界面显示
+  const all = getAllPersonas();
+  const set = new Set();
+  for (const p of all) for (const s of (p.series || [])) if (s) set.add(s);
+  for (const s of (state.customOptions?.series || [])) set.add(s);
+  return [...set].sort();
+}
+function getSinList(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  return val ? [val] : [];
+}
+function getSeriesList(val) {
+  if (Array.isArray(val)) return val.filter(Boolean);
+  return val ? [val] : [];
+}
+// 技能栏罪孽：优先读 skillN_sins 数组（新版多资源），兼容旧版单值 skillN_sin
+function getSkillSins(p, n) {
+  const key = 'skill' + n + '_sins';
+  if (Array.isArray(p[key]) && p[key].length) return p[key].filter(Boolean);
+  const s = p['skill' + n + '_sin'];
+  return s ? [s] : [];
+}
+// 守备技能罪孽：优先读 guard_sins 数组（新版多资源），兼容旧版单值 guard_sin
+function getGuardSins(p) {
+  if (Array.isArray(p.guard_sins) && p.guard_sins.length) return p.guard_sins.filter(Boolean);
+  return p.guard_sin ? [p.guard_sin] : [];
+}
+function getPersonaEffects(p) {
+  return [p.attack_effect1, p.attack_effect2, p.attack_effect3, p.attack_effect4, p.attack_effect5, p.attack_effect6].filter(Boolean);
+}
+function getPersonaSpecials(p) {
+  const arr = [p.special_effect1, p.special_effect2, p.special_effect3, p.special_effect4, p.special_effect5, p.special_effect6].filter(Boolean);
+  if (arr.length) return arr;
+  return p.special_effect ? [p.special_effect] : [];
+}
+
+// ===== 判定引擎 =====
+function getTeamResources() {
+  const active = state.team.slice(0, 7).filter(Boolean);
+  const sinCounts = {};
+  const sinRoles = {};
+  const typeCounts = {};
+  const effectCounts = {};
+  const specialCounts = {};
+
+  for (const p of active) {
+    const sins = new Set();
+    for (const [t, ss] of [[p.skill1_type, getSkillSins(p,1)],[p.skill2_type, getSkillSins(p,2)],[p.skill3_type, getSkillSins(p,3)]]) {
+      for (const s of ss) { sinCounts[s] = (sinCounts[s]||0)+1; sins.add(s); }
+      if (t) typeCounts[t] = (typeCounts[t]||0)+1;
+    }
+    // 守备技能：同样产出罪孽资源（防御/闪避/反击不计入伤害类型）
+    for (const gs of getGuardSins(p)) { sinCounts[gs] = (sinCounts[gs]||0)+1; sins.add(gs); }
+    for (const s of sins) sinRoles[s] = (sinRoles[s]||0)+1;
+    for (const e of getPersonaEffects(p)) {
+      effectCounts[e] = (effectCounts[e]||0)+1;
+    }
+    for (const s of getPersonaSpecials(p)) {
+      specialCounts[s] = (specialCounts[s]||0)+1;
+    }
+  }
+  return { sinCounts, sinRoles, typeCounts, effectCounts, specialCounts };
+}
+
+function comb(n, k) {
+  if (n < k || k < 0) return 0;
+  let r = 1;
+  for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1);
+  return r;
+}
+// 整队每回合各罪孽期望产出（D 判定：P 自动操作，不主动使用守备）
+// 游戏机制：技能Ⅰ×3、Ⅱ×2、Ⅲ×1 共6槽，每回合抽2槽施放1个；
+// 某罪孽抽中概率 = 1 - C(6-k,2)/C(6,2)，k=含该罪孽的技能槽数
+function getExpectedPerTurn() {
+  const active = state.team.slice(0, 7).filter(Boolean);
+  const exp = {};
+  for (const p of active) {
+    const slots = [...getSkillSins(p,1), ...getSkillSins(p,1), ...getSkillSins(p,1),
+                  ...getSkillSins(p,2), ...getSkillSins(p,2),
+                  ...getSkillSins(p,3)];
+    for (const s of SIN_LIST) {
+      const k = slots.filter(x => x === s).length;
+      if (k > 0) {
+        exp[s] = (exp[s] || 0) + (1 - comb(6 - k, 2) / 15);
+      }
+    }
+  }
+  return exp;
+}
+
+function judgeOne(persona, isSupport) {
+  const sins = isSupport ? (persona.support_sins || []) : (persona.passive_sins || []);
+  const pType = isSupport ? persona.support_type : persona.passive_type;
+
+  if (!pType || !sins.length) {
+    return { status: 'pending', label: '待标注' };
+  }
+  if (pType === '常时') {
+    return { status: 'ok', A: true, B: true, label: '常时触发' };
+  }
+  const { sinCounts, sinRoles } = getTeamResources();
+  // 每个罪孽独立数量，全部达标才算可
+  let allA = true, allB = true;
+  const details = [];
+  for (const item of sins) {
+    const need = parseInt(item.count) || 0;
+    const haveA = sinRoles[item.sin] || 0;
+    const haveB = sinCounts[item.sin] || 0;
+    if (haveA < need) allA = false;
+    if (haveB < need) allB = false;
+    details.push({ sin: item.sin, haveA, haveB, need });
+  }
+  // C: 多回合（运气最好）——每回合最多产出 = 持有该罪孽的人数(含守备)，不考虑概率
+  // D: 多回合（P自动期望）——按抽卡期望估算，不主动使用守备
+  // 多资源需求按先后累加回合
+  let C = undefined, CImpossible = [], D = undefined, DImpossible = [];
+  if (pType === '持有') {
+    const exp = getExpectedPerTurn();
+    let allC = true, allD = true;
+    const cRounds = [], dRounds = [];
+    const cImp = [], dImp = [];
+    for (const item of sins) {
+      const need = parseInt(item.count) || 0;
+      const have = sinCounts[item.sin] || 0;
+      const gap = Math.max(0, need - have);
+      if (gap === 0) continue;
+      const perTurn = sinRoles[item.sin] || 0;
+      if (perTurn === 0) { allC = false; cImp.push(item.sin); }
+      else cRounds.push(Math.ceil(gap / perTurn));
+      const perTurnExp = exp[item.sin] || 0;
+      if (perTurnExp <= 0) { allD = false; dImp.push(item.sin); }
+      else dRounds.push(Math.ceil(gap / perTurnExp));
+    }
+    C = allC ? cRounds.reduce((a, b) => a + b, 0) : null;
+    CImpossible = cImp;
+    D = allD ? dRounds.reduce((a, b) => a + b, 0) : null;
+    DImpossible = dImp;
+  }
+  return {
+    status: (allA || allB) ? 'ok' : 'fail',
+    A: allA, B: allB,
+    details, pType,
+    haveA: details.map(d => d.haveA).join('+'),
+    haveB: details.map(d => d.haveB).join('+'),
+    need: details.map(d => d.need).join('+'),
+    failA: details.filter(d => d.haveA < d.need).map(d => `${d.sin}×${d.need - d.haveA}`),
+    failB: details.filter(d => d.haveB < d.need).map(d => `${d.sin}×${d.need - d.haveB}`),
+    C, CImpossible, D, DImpossible,
+    sin: sins.map(s => s.sin).join('+')
+  };
+}
+
+// ===== 渲染 =====
+function sinIcon(sin) {
+  const key = SIN_MAP[sin];
+  const custom = state.settings.icons['sin_' + key];
+  if (custom) return `<img src="${custom}" class="custom-icon-preview" alt="${sin}">`;
+  return `<span class="sin-icon ${key}" title="${sin}">${sin.charAt(0)}</span>`;
+}
+
+function renderResourceBar() {
+  const { sinCounts, typeCounts, effectCounts, specialCounts } = getTeamResources();
+  let html = '<div class="resource-group"><span class="resource-group-label">罪孽资源</span>';
+  for (const sin of SIN_LIST) {
+    const cnt = sinCounts[sin] || 0;
+    html += `<div class="resource-item">${sinIcon(sin)}<span class="resource-count ${cnt===0?'zero':''}">${cnt}</span></div>`;
+  }
+  html += '</div><div class="resource-group"><span class="resource-group-label">伤害类型</span>';
+  for (const t of TYPE_LIST) {
+    const cnt = typeCounts[t] || 0;
+    html += `<div class="resource-item"><span style="font-size:12px;color:var(--text-secondary)">${t}</span><span class="resource-count ${cnt===0?'zero':''}">${cnt}</span></div>`;
+  }
+  html += '</div>';
+  const effectEntries = Object.entries(effectCounts);
+  if (effectEntries.length) {
+    html += '<div class="resource-group"><span class="resource-group-label">异常效果</span>';
+    for (const [e, cnt] of effectEntries) {
+      html += `<div class="resource-item"><span style="font-size:12px;color:var(--text-secondary)">${colorizeEffects(e)}</span><span class="resource-count">${cnt}</span></div>`;
+    }
+    html += '</div>';
+  }
+  const specialEntries = Object.entries(specialCounts);
+  if (specialEntries.length) {
+    html += '<div class="resource-group"><span class="resource-group-label">特殊</span>';
+    for (const [e, cnt] of specialEntries) {
+      html += `<div class="resource-item"><span style="font-size:12px;color:var(--text-secondary)">${colorizeEffects(e)}</span><span class="resource-count">${cnt}</span></div>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('resourceBar').innerHTML = html;
+}
+
+function renderTeam() {
+  const panel = document.getElementById('teamPanel');
+  let html = '<div class="team-section-label" style="display:flex;align-items:center;justify-content:space-between;"><span>上场区 (1-7)</span><button class="btn" style="padding:2px 10px;font-size:11px;" onclick="clearTeamSection(0,7)" title="一键清空上场区">清空</button></div>';
+  for (let i = 0; i < 7; i++) {
+    html += renderSlot(i, false);
+  }
+  html += '<div class="team-section-label" style="display:flex;align-items:center;justify-content:space-between;"><span>候补区 (8-12)</span><button class="btn" style="padding:2px 10px;font-size:11px;" onclick="clearTeamSection(7,12)" title="一键清空候补区">清空</button></div>';
+  for (let i = 7; i < 12; i++) {
+    html += renderSlot(i, true);
+  }
+  panel.innerHTML = html;
+
+  // 绑定拖拽事件
+  for (let i = 0; i < 12; i++) {
+    const slot = document.getElementById('slot-' + i);
+    if (slot) {
+      slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+      slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+      slot.addEventListener('drop', e => {
+        e.preventDefault();
+        slot.classList.remove('drag-over');
+        const srcSlot = e.dataTransfer.getData('slotIndex');
+        if (srcSlot !== '') {
+          const src = parseInt(srcSlot);
+          if (src !== i) {
+            const tmp = state.team[src];
+            state.team[src] = state.team[i];
+            state.team[i] = tmp;
+            saveState(); renderAll();
+          }
+          return;
+        }
+        const idx = parseInt(e.dataTransfer.getData('personaIndex'));
+        const all = getAllPersonas();
+        if (idx >= 0 && idx < all.length) {
+          const np = all[idx];
+          // 同罪人限制：每位罪人只能编入一个人格
+          let dup = false;
+          for (let ti = 0; ti < 12; ti++) {
+            if (ti !== i && state.team[ti] && state.team[ti].role === np.role) { dup = true; break; }
+          }
+          if (dup) { return; }
+          state.team[i] = np;
+          saveState(); renderAll();
+        }
+      });
+    }
+  }
+}
+
+function renderSlot(i, isSupport) {
+  const p = state.team[i];
+  if (!p) {
+    return `<div class="slot ${isSupport?'support':''}" id="slot-${i}" data-slot="${i}">
+      <span class="slot-number">${i+1}</span>
+      <span class="slot-empty-text">拖拽人格到此处</span>
+    </div>`;
+  }
+  let sinsHtml = '';
+  const sins = [...getSkillSins(p,1), ...getSkillSins(p,2), ...getSkillSins(p,3)];
+  for (const s of sins) sinsHtml += sinIcon(s);
+  // 守备技能：常驻，被攻击指向触发产资源，同样展示其罪孽
+  let guardHtml = '';
+  const guardSinsArr = getGuardSins(p);
+  if (p.guard_type && guardSinsArr.length) {
+    guardHtml = `<div class="slot-guard">守备${guardSinsArr.map(s=>sinIcon(s)).join('')}<span>${p.guard_type}</span></div>`;
+  }
+  return `<div class="slot ${isSupport?'support':''}" id="slot-${i}" data-slot="${i}" draggable="true" ondragstart="slotDragStart(event,${i})" onclick="showDetail(${getAllPersonas().indexOf(p)})">
+    <button class="slot-remove" onclick="event.stopPropagation();removeSlot(${i})">&times;</button>
+    <span class="slot-number">${i+1}</span>
+    <div class="slot-persona">
+      <span class="slot-star">${p.star}</span>
+      <div class="slot-info">
+        <div class="slot-series">${getSeriesList(p.series).join(' / ')}${p.title?' · '+p.title:''}</div>
+        <div class="slot-title">${p.role}</div>
+        <div class="slot-sins">${sinsHtml}</div>
+        ${guardHtml}
+      </div>
+    </div>
+  </div>`;
+}
+
+function removeSlot(i) {
+  state.team[i] = null;
+  saveState(); renderAll();
+}
+function slotDragStart(e, i) {
+  e.dataTransfer.setData('slotIndex', i);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function clearTeam() {
+  state.team = new Array(12).fill(null);
+  saveState(); renderAll();
+}
+
+// ===== EGO =====
+let egoEditRole = null;
+let editingEgoId = null;
+function enterEgoView(role) {
+  egoEditRole = role;
+  state.currentRole = role;
+  state.libraryView = 'egos';
+  document.getElementById('sinnersGrid').style.display = 'none';
+  document.getElementById('personasList').style.display = 'none';
+  document.getElementById('egosPage').style.display = 'block';
+  document.getElementById('libraryBack').classList.add('show');
+  document.getElementById('libraryCurrentRole').textContent = role + ' 的 EGO';
+  document.getElementById('libraryTitle').style.display = 'none';
+  document.getElementById('filters').style.display = 'none';
+  renderEgoPage(role);
+}
+function renderEgoPage(role) {
+  document.getElementById('egosPage').innerHTML =
+    '<div class="ego-slots-bar">' + renderEgoSlotsBar(role) + '</div>' +
+    '<div class="ego-hint">每种类型可装备 1 个 EGO；卡片底部显示当前整队罪孽资源是否支持施放，不足时显示 C（运气最好）/D（P自动期望）积累回合数，与被动判定一致</div>' +
+    '<div class="ego-groups">' + renderEgoGroups(role) + '</div>';
+}
+function renderEgoSlotsBar(role) {
+  const slots = state.personaEgos[role] || {};
+  let html = '';
+  for (const r of EGO_RARITIES) {
+    const egoId = slots[r];
+    const ego = egoId ? getEgoById(egoId) : null;
+    html += `<div class="ego-slot">
+      <div class="ego-slot-label" style="color:${EGO_RARITY_COLORS[r]||'#ccc'}">${r}</div>
+      <div class="ego-slot-value">${ego ? ego.name : '未装备'}</div>
+      ${ego ? `<button class="btn btn-xs" onclick="unequipEgo('${role}','${r}')">卸下</button>` : ''}
+    </div>`;
+  }
+  return html;
+}
+function renderEgoGroups(role) {
+  const all = getEgosByRole(role);
+  let html = '';
+  for (const r of EGO_RARITIES) {
+    const list = all.filter(e => e.rarity === r);
+    html += `<div class="ego-group">
+      <div class="ego-group-title">
+        <span style="color:${EGO_RARITY_COLORS[r]||'#ccc'}">${r}</span>
+        <button class="btn btn-xs" onclick="openEgoAdd('${role}','${r}')">+ 添加 ${r} EGO</button>
+      </div>`;
+    if (list.length) {
+      html += '<div class="ego-group-cards">';
+      for (const e of list) html += renderEgoCard(e, role);
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:12px;color:var(--text-muted);padding:6px 0;">暂无 ' + r + ' 类型 EGO，点击上方按钮添加</div>';
+    }
+    html += '</div>';
+  }
+  return html;
+}
+function getEgoSpecials(ego) {
+  if (Array.isArray(ego.specials) && ego.specials.length) return ego.specials.filter(Boolean);
+  return ego.special ? [ego.special] : [];
+}
+function getEgoEffects(ego) {
+  if (Array.isArray(ego.effects)) return ego.effects.filter(Boolean);
+  return [ego.effect].filter(Boolean);
+}
+function egoAffordable(ego) {
+  // C/D 双判定：C=运气最好(每回合最多产出=人数,含守备)，D=P自动期望(抽卡期望,不含守备)
+  if (!ego.cost || !ego.cost.length) return { ok: true, c: { rounds: 0, impossible: [] }, d: { rounds: 0, impossible: [] } };
+  const { sinCounts, sinRoles } = getTeamResources();
+  const exp = getExpectedPerTurn();
+  let allOk = true;
+  const cRounds = [], dRounds = [];
+  const cImp = [], dImp = [];
+  for (const c of ego.cost) {
+    const have = sinCounts[c.sin] || 0;
+    if (have >= c.count) continue;
+    allOk = false;
+    const gap = c.count - have;
+    const perTurn = sinRoles[c.sin] || 0;
+    if (perTurn === 0) cImp.push(c.sin);
+    else cRounds.push(Math.ceil(gap / perTurn));
+    const perTurnExp = exp[c.sin] || 0;
+    if (perTurnExp <= 0) dImp.push(c.sin);
+    else dRounds.push(Math.ceil(gap / perTurnExp));
+  }
+  return {
+    ok: allOk,
+    c: { rounds: cImp.length ? null : cRounds.reduce((a, b) => a + b, 0), impossible: cImp },
+    d: { rounds: dImp.length ? null : dRounds.reduce((a, b) => a + b, 0), impossible: dImp }
+  };
+}
+function renderEgoCard(ego, role) {
+  const aff = egoAffordable(ego);
+  const costHtml = (ego.cost && ego.cost.length)
+    ? ego.cost.map(c => `${sinIcon(c.sin)}<span style="color:${sinColor(c.sin)}">\u00d7${c.count}</span>`).join('')
+    : '<span style="color:var(--text-muted);">无消耗</span>';
+  const effs = getEgoEffects(ego);
+  const equipped = state.personaEgos[role] && state.personaEgos[role][ego.rarity] === ego.id;
+  let affHtml;
+  if (aff.ok) {
+    affHtml = '<div class="ego-afford ok">\u2713 资源充足</div>';
+  } else {
+    const parts = [];
+    if (state.judgeC !== false && aff.c) {
+      parts.push(aff.c.rounds === null ? ('C无法(缺:' + aff.c.impossible.join('、') + ')') : ('C约' + aff.c.rounds + '回合'));
+    }
+    if (state.judgeD !== false && aff.d) {
+      parts.push(aff.d.rounds === null ? ('D无法(缺:' + aff.d.impossible.join('、') + ')') : ('D期望约' + aff.d.rounds + '回合'));
+    }
+    affHtml = '<div class="ego-afford ' + (parts.length ? 'warn' : 'fail') + '">\u26a0 当前不足，' + (parts.length ? parts.join(' / ') : '无法触发') + '</div>';
+  }
+  return `<div class="ego-card ${equipped?'equipped':''}">
+    <div class="ego-card-header">
+      <span class="ego-rarity" style="color:${EGO_RARITY_COLORS[ego.rarity]||'#ccc'}">${ego.rarity}</span>
+      <span class="ego-name">${ego.name||'未命名'}</span>
+      ${equipped?'<span class="ego-equipped-badge">已装备</span>':''}
+    </div>
+    <div class="ego-card-body">
+      <div class="ego-row">罪孽 ${ego.sin?sinIcon(ego.sin):'-'}${ego.skill_type?' / '+ego.skill_type:''}</div>
+      <div class="ego-row">消耗 ${costHtml}</div>
+      ${effs.length?`<div class="ego-row">效果 ${effs.map(e=>`<span class="effect-tag">${colorizeEffects(e)}</span>`).join('')}</div>`:''}
+      ${getEgoSpecials(ego).length?`<div class="ego-row">特殊 ${getEgoSpecials(ego).map(s=>`<span class="effect-tag">${colorizeEffects(s)}</span>`).join('')}</div>`:''}
+      ${ego.passive?`<div class="ego-row ego-passive">被动 ${(ego.passive||'').replace(/\n/g,'<br>')}</div>`:''}
+      ${affHtml}
+    </div>
+    <div class="ego-card-actions">
+      <button class="btn btn-xs" onclick="equipEgo('${role}','${ego.rarity}','${ego.id}')">${equipped?'更换':'装备'}</button>
+      <button class="btn btn-xs" onclick="openEgoEdit('${ego.id}')">编辑</button>
+      <button class="btn btn-xs btn-danger" onclick="deleteEgo('${ego.id}')">删除</button>
+    </div>
+  </div>`;
+}
+function equipEgo(role, rarity, egoId) {
+  if (!state.personaEgos[role]) state.personaEgos[role] = {};
+  state.personaEgos[role][rarity] = egoId;
+  saveState();
+  renderEgoPage(role);
+}
+function unequipEgo(role, rarity) {
+  if (state.personaEgos[role]) delete state.personaEgos[role][rarity];
+  saveState();
+  renderEgoPage(role);
+}
+function deleteEgo(egoId) {
+  state.egos = state.egos.filter(e => e.id !== egoId);
+  if (DEFAULT_EGOS.some(d => d.id === egoId)) {
+    if (!state.deletedEgoIds) state.deletedEgoIds = [];
+    if (!state.deletedEgoIds.includes(egoId)) state.deletedEgoIds.push(egoId);
+  }
+  for (const role in state.personaEgos) {
+    for (const r in state.personaEgos[role]) {
+      if (state.personaEgos[role][r] === egoId) delete state.personaEgos[role][r];
+    }
+  }
+  saveState();
+  renderEgoPage(egoEditRole || (state.currentRole || '李箱'));
+}
+function openEgoAdd(role, rarity) {
+  egoEditRole = role;
+  editingEgoId = null;
+  document.getElementById('egoEditTitle').textContent = '添加 ' + role + ' 的 ' + rarity + ' EGO';
+  document.getElementById('newEgoName').value = '';
+  document.getElementById('newEgoRarity').value = rarity;
+  document.getElementById('newEgoSin').value = '';
+  document.getElementById('newEgoSkillType').value = '';
+  document.getElementById('newEgoEffect1').value = '';
+  document.getElementById('newEgoEffect2').value = '';
+  document.getElementById('newEgoEffect3').value = '';
+  document.getElementById('newEgoEffect4').value = '';
+  document.getElementById('newEgoEffect5').value = '';
+  document.getElementById('newEgoEffect6').value = '';
+  document.getElementById('newEgoSpecial').value = '';
+  document.getElementById('newEgoSpecial2').value = '';
+  document.getElementById('newEgoSpecial3').value = '';
+  document.getElementById('newEgoSpecial4').value = '';
+  document.getElementById('newEgoSpecial5').value = '';
+  document.getElementById('newEgoSpecial6').value = '';
+  document.getElementById('newEgoPassive').value = '';
+  document.getElementById('egoCostRows').innerHTML = '';
+  addEgoCostRow();
+  openModal('egoEditModal');
+}
+function openEgoEdit(egoId) {
+  const ego = getEgoById(egoId);
+  if (!ego) return;
+  egoEditRole = ego.role;
+  editingEgoId = egoId;
+  document.getElementById('egoEditTitle').textContent = '编辑 EGO：' + (ego.name || '');
+  document.getElementById('newEgoName').value = ego.name || '';
+  document.getElementById('newEgoRarity').value = ego.rarity || 'ZAYIN';
+  document.getElementById('newEgoSin').value = ego.sin || '';
+  document.getElementById('newEgoSkillType').value = ego.skill_type || '';
+  const egoEffs = getEgoEffects(ego);
+  document.getElementById('newEgoEffect1').value = egoEffs[0] || '';
+  document.getElementById('newEgoEffect2').value = egoEffs[1] || '';
+  document.getElementById('newEgoEffect3').value = egoEffs[2] || '';
+  document.getElementById('newEgoEffect4').value = egoEffs[3] || '';
+  document.getElementById('newEgoEffect5').value = egoEffs[4] || '';
+  document.getElementById('newEgoEffect6').value = egoEffs[5] || '';
+  const egoSpecials = getEgoSpecials(ego);
+  document.getElementById('newEgoSpecial').value = egoSpecials[0] || '';
+  document.getElementById('newEgoSpecial2').value = egoSpecials[1] || '';
+  document.getElementById('newEgoSpecial3').value = egoSpecials[2] || '';
+  document.getElementById('newEgoSpecial4').value = egoSpecials[3] || '';
+  document.getElementById('newEgoSpecial5').value = egoSpecials[4] || '';
+  document.getElementById('newEgoSpecial6').value = egoSpecials[5] || '';
+  document.getElementById('newEgoPassive').value = ego.passive || '';
+  document.getElementById('egoCostRows').innerHTML = '';
+  if (ego.cost && ego.cost.length) for (const c of ego.cost) addEgoCostRow(c.sin, c.count);
+  else addEgoCostRow();
+  openModal('egoEditModal');
+}
+function addEgoCostRow(sin, count) {
+  const rows = document.getElementById('egoCostRows');
+  if (!rows) return;
+  if (rows.querySelectorAll('.ego-cost-row').length >= 7) return;
+  const div = document.createElement('div');
+  div.className = 'ego-cost-row';
+  let sinOpts = '<option value="">罪孽</option>';
+  for (const s of SIN_LIST) sinOpts += `<option value="${s}" ${s===sin?'selected':''}>${s}</option>`;
+  div.innerHTML = `<select class="ego-cost-sin" style="flex:1;">${sinOpts}</select>
+    <input type="number" class="ego-cost-count" min="0" max="99" placeholder="数量" value="${count||''}" style="width:64px;">
+    <button class="btn btn-xs btn-danger" onclick="this.parentNode.remove()">\u00d7</button>`;
+  rows.appendChild(div);
+}
+function saveEgo() {
+  const cost = [];
+  for (const row of document.querySelectorAll('#egoCostRows .ego-cost-row')) {
+    const sin = row.querySelector('.ego-cost-sin').value;
+    const count = parseInt(row.querySelector('.ego-cost-count').value) || 0;
+    if (sin && count > 0) cost.push({ sin, count });
+  }
+  const ego = {
+    id: editingEgoId || ('ego_' + Date.now()),
+    role: egoEditRole,
+    name: document.getElementById('newEgoName').value.trim(),
+    rarity: document.getElementById('newEgoRarity').value,
+    sin: document.getElementById('newEgoSin').value,
+    skill_type: document.getElementById('newEgoSkillType').value,
+    effects: [document.getElementById('newEgoEffect1').value, document.getElementById('newEgoEffect2').value, document.getElementById('newEgoEffect3').value, document.getElementById('newEgoEffect4').value, document.getElementById('newEgoEffect5').value, document.getElementById('newEgoEffect6').value].filter(Boolean),
+    specials: [document.getElementById('newEgoSpecial').value, document.getElementById('newEgoSpecial2').value, document.getElementById('newEgoSpecial3').value, document.getElementById('newEgoSpecial4').value, document.getElementById('newEgoSpecial5').value, document.getElementById('newEgoSpecial6').value].filter(Boolean),
+    special: document.getElementById('newEgoSpecial').value,
+    passive: document.getElementById('newEgoPassive').value,
+    cost
+  };
+  if (!ego.name || !ego.rarity) return;
+  if (editingEgoId) {
+    const i = state.egos.findIndex(e => e.id === editingEgoId);
+    if (i >= 0) state.egos[i] = ego; else state.egos.push(ego);
+  } else {
+    state.egos.push(ego);
+  }
+  editingEgoId = null;
+  saveState();
+  closeModal('egoEditModal');
+  renderEgoPage(egoEditRole);
+}
+
+// ===== 人格库渲染 =====
+function renderMiniPersona(p) {
+  let skillsHtml = '';
+  for (const [i, t, ss] of [['Ⅰ',p.skill1_type,getSkillSins(p,1)],['Ⅱ',p.skill2_type,getSkillSins(p,2)],['Ⅲ',p.skill3_type,getSkillSins(p,3)]]) {
+    if (ss.length) skillsHtml += `<div class="persona-skill"><span class="skill-no">${i}</span><span>${t||''}</span>${ss.map(s=>sinIcon(s)).join('')}</div>`;
+  }
+  let guardHtml = '';
+  const guardSins = getGuardSins(p);
+  if (p.guard_type && guardSins.length) {
+    guardHtml = `<div class="persona-guard"><span class="guard-label">守备</span>${guardSins.map(s=>sinIcon(s)).join('')}<span>${p.guard_type}</span></div>`;
+  }
+  let effectsHtml = '';
+  for (const e of [...getPersonaEffects(p), ...getPersonaSpecials(p)]) {
+    effectsHtml += `<span class="effect-tag">${colorizeEffects(e)}</span>`;
+  }
+  const pTypeClass = p.passive_type === '共鸣' ? 'resonance' : p.passive_type === '持有' ? 'owned' : p.passive_type === '常时' ? 'constant' : 'pending';
+  const sTypeClass = p.support_type === '共鸣' ? 'resonance' : p.support_type === '持有' ? 'owned' : p.support_type === '常时' ? 'constant' : 'pending';
+  const pTypeLabel = p.passive_type || '待标注';
+  const sTypeLabel = p.support_type || '待标注';
+  const pSinStr = colorize((p.passive_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-');
+  const sSinStr = colorize((p.support_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-');
+  return `<div class="mini-persona">
+    <div class="persona-header">
+      <span class="persona-star">${p.star}</span>
+      <span class="persona-series">${getSeriesList(p.series).join(' / ')}${p.title ? ' · '+p.title : ''}</span>
+    </div>
+    <div class="persona-skills">${skillsHtml}</div>
+    ${guardHtml}
+    <div class="persona-effects">${effectsHtml}</div>
+    <div class="persona-passives">
+      <div class="passive-row"><span class="passive-type-tag ${pTypeClass}">${pTypeLabel}</span><span>${pSinStr}</span></div>
+      <div class="passive-row support-row"><span class="passive-type-tag ${sTypeClass}">${sTypeLabel}</span><span><span class="support-prefix">支援: </span>${sSinStr}</span></div>
+    </div>
+  </div>`;
+}
+function renderMiniEgoHtml(role) {
+  const slots = state.personaEgos[role] || {};
+  const items = [];
+  for (const r of EGO_RARITIES) {
+    const eid = slots[r];
+    if (!eid) continue;
+    const ego = getEgoById(eid);
+    if (!ego) continue;
+    items.push(`<div class="mini-ego-item" title="${ego.name}">
+      <div class="mini-ego-rarity" style="color:${EGO_RARITY_COLORS[r]||'#ccc'}">${r}</div>
+      <div class="mini-ego-name">${ego.name}</div>
+    </div>`);
+  }
+  if (!items.length) return '';
+  return `<div class="mini-ego-pane"><div class="mini-ego-title">EGO</div>${items.join('')}</div>`;
+}
+function renderSinnersGrid() {
+  const all = getAllPersonas();
+  const grid = document.getElementById('sinnersGrid');
+  let html = '';
+  const filteredAll = getFilteredPersonas();
+  const isFiltering = state.filters.series || state.filters.star || state.filters.sin
+    || state.filters.effects.length || state.filters.specialEffects.length
+    || state.filters.passiveType || state.filters.supportType
+    || state.filters.passiveSin || state.filters.supportSin;
+  for (const role of ROLE_LIST) {
+    const rolePersonas = all.filter(p => p.role === role);
+    const roleFiltered = filteredAll.filter(p => p.role === role).length;
+    const inTeamIdx = state.team.findIndex(p => p && p.role === role);
+    const inTeam = inTeamIdx >= 0 ? state.team[inTeamIdx] : null;
+    const badgeCls = inTeam ? (inTeamIdx < 7 ? 'team-badge-active' : 'team-badge-bench') : '';
+    const countText = isFiltering
+      ? `筛选出 ${roleFiltered} / ${rolePersonas.length} 个`
+      : `${rolePersonas.length} 个人格`;
+    html += `<div class="sinner-card ${inTeam?'has-persona':''}" onclick="enterRole('${role}')">
+      <div class="sinner-top">
+        <div class="sinner-name">${role}</div>
+        <button class="btn btn-xs ego-config-btn" onclick="event.stopPropagation();enterEgoView('${role}')" title="配置该角色的 EGO">配置EGO</button>
+      </div>
+      <div class="sinner-count">${countText}</div>
+      ${inTeam ? `<div class="sinner-persona-preview"><span class="slot-badge ${badgeCls}">已编入 [${inTeamIdx+1}]</span>${getSeriesList(inTeam.series).join(' / ')}</div>
+      <div class="sinner-persona-detail"><div class="mini-persona-wrap">${renderMiniPersona(inTeam)}</div>${renderMiniEgoHtml(role)}</div>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+
+function enterRole(role) {
+  state.currentRole = role;
+  state.libraryView = 'personas';
+  document.getElementById('sinnersGrid').style.display = 'none';
+  document.getElementById('personasList').style.display = 'grid';
+  document.getElementById('libraryBack').classList.add('show');
+  document.getElementById('libraryCurrentRole').textContent = role + ' 的人格';
+  document.getElementById('libraryTitle').style.display = 'none';
+  document.getElementById('filters').style.display = '';
+  renderPersonas();
+}
+
+function backToSinners() {
+  state.libraryView = 'sinners';
+  state.currentRole = null;
+  document.getElementById('sinnersGrid').style.display = 'grid';
+  document.getElementById('personasList').style.display = 'none';
+  document.getElementById('egosPage').style.display = 'none';
+  document.getElementById('libraryBack').classList.remove('show');
+  document.getElementById('libraryCurrentRole').textContent = '';
+  document.getElementById('libraryTitle').style.display = '';
+  document.getElementById('filters').style.display = '';
+  renderSinnersGrid();
+}
+
+function getFilteredPersonas() {
+  const all = getAllPersonas();
+  const f = state.filters;
+  return all.filter(p => {
+    if (state.currentRole && p.role !== state.currentRole) return false;
+    if (f.series) {
+      const pSeries = getSeriesList(p.series);
+      if (!pSeries.includes(f.series)) return false;
+    }
+    if (f.star && p.star !== f.star) return false;
+    if (f.sin) {
+      const allSins = [...getSkillSins(p,1), ...getSkillSins(p,2), ...getSkillSins(p,3)];
+      if (!allSins.includes(f.sin)) return false;
+    }
+    if (f.effects.length) {
+      const pEffects = getPersonaEffects(p);
+      if (f.filterMode === 'intersection') {
+        if (!f.effects.every(e => pEffects.includes(e))) return false;
+      } else {
+        if (!f.effects.some(e => pEffects.includes(e))) return false;
+      }
+    }
+    if (f.specialEffects.length) {
+      const pSpecial = getPersonaSpecials(p);
+      if (f.filterMode === 'intersection') {
+        if (!f.specialEffects.every(e => pSpecial.includes(e))) return false;
+      } else {
+        if (!f.specialEffects.some(e => pSpecial.includes(e))) return false;
+      }
+    }
+    if (f.passiveSin) {
+      const hasPSin = (p.passive_sins || []).some(x => x.sin === f.passiveSin);
+      if (!hasPSin) return false;
+    }
+    if (f.supportSin) {
+      const hasSSin = (p.support_sins || []).some(x => x.sin === f.supportSin);
+      if (!hasSSin) return false;
+    }
+    if (f.passiveType) {
+      if (f.passiveType === 'pending') {
+        if (p.passive_type) return false;
+      } else if (p.passive_type !== f.passiveType) return false;
+    }
+    if (f.supportType) {
+      if (f.supportType === 'pending') {
+        if (p.support_type) return false;
+      } else if (p.support_type !== f.supportType) return false;
+    }
+    return true;
+  });
+}
+
+function setSortOrder(order) {
+  sortOrder = order;
+  document.querySelectorAll('#sortBtnGroup .sort-btn').forEach(btn => btn.classList.remove('active'));
+  if (event && event.target) event.target.classList.add('active');
+  renderPersonas();
+}
+function sortPersonas(list) {
+  const starOrder = { 'O': 1, 'OO': 2, 'OOO': 3 };
+  return [...list].sort((a, b) => {
+    const sa = starOrder[a.star] || 0;
+    const sb = starOrder[b.star] || 0;
+    return sortOrder === 'star_asc' ? sa - sb : sb - sa;
+  });
+}
+function renderPersonas() {
+  if (state.libraryView === 'sinners') { renderSinnersGrid(); return; }
+  if (state.libraryView !== 'personas') return;
+  const list = document.getElementById('personasList');
+  const filtered = sortPersonas(getFilteredPersonas());
+  const all = getAllPersonas();
+  let html = '';
+  for (const p of filtered) {
+    const idx = all.indexOf(p);
+    const inTeam = state.team.includes(p);
+    let skillsHtml = '';
+    for (const [i, t, ss] of [['Ⅰ',p.skill1_type,getSkillSins(p,1)],['Ⅱ',p.skill2_type,getSkillSins(p,2)],['Ⅲ',p.skill3_type,getSkillSins(p,3)]]) {
+      if (ss.length) skillsHtml += `<div class="persona-skill"><span class="skill-no">${i}</span><span>${t||''}</span>${ss.map(s=>sinIcon(s)).join('')}</div>`;
+    }
+    let guardHtml = '';
+    const guardSins = getGuardSins(p);
+    if (p.guard_type && guardSins.length) {
+      guardHtml = `<div class="persona-guard"><span class="guard-label">守备</span>${guardSins.map(s=>sinIcon(s)).join('')}<span>${p.guard_type}</span></div>`;
+    }
+    let effectsHtml = '';
+    for (const e of [...getPersonaEffects(p), ...getPersonaSpecials(p)]) {
+      effectsHtml += `<span class="effect-tag">${colorizeEffects(e)}</span>`;
+    }
+    const pTypeClass = p.passive_type === '共鸣' ? 'resonance' : p.passive_type === '持有' ? 'owned' : p.passive_type === '常时' ? 'constant' : 'pending';
+    const sTypeClass = p.support_type === '共鸣' ? 'resonance' : p.support_type === '持有' ? 'owned' : p.support_type === '常时' ? 'constant' : 'pending';
+    const pTypeLabel = p.passive_type || '待标注';
+    const sTypeLabel = p.support_type || '待标注';
+    const pSinStr = colorize((p.passive_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-');
+    const sSinStr = colorize((p.support_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-');
+
+    html += `<div class="persona-card ${inTeam?'in-team':''}" draggable="true" data-idx="${idx}"
+      ondragstart="event.dataTransfer.setData('personaIndex',${idx})"
+      onclick="showDetail(${idx})">
+      <div class="persona-header">
+        <span class="persona-star">${p.star}</span>
+        <span class="persona-series">${getSeriesList(p.series).join(' / ')}</span>
+      </div>
+      ${p.title ? `<div class="persona-title">${p.title}</div>` : ''}
+      <div class="persona-skills">${skillsHtml}</div>
+      ${guardHtml}
+      <div class="persona-effects">${effectsHtml}</div>
+      <div class="persona-passives">
+        <div class="passive-row"><span class="passive-type-tag ${pTypeClass}">${pTypeLabel}</span><span>${pSinStr}</span></div>
+        <div class="passive-row support-row"><span class="passive-type-tag ${sTypeClass}">${sTypeLabel}</span><span><span class="support-prefix">支援: </span>${sSinStr}</span></div>
+      </div>
+      ${p.passive_effect ? `<div class="passive-note">${p.passive_effect}</div>` : ''}
+      ${p.support_effect ? `<div class="passive-note support-note">支援: ${p.support_effect}</div>` : ''}
+    </div>`;
+  }
+  if (!filtered.length) html = '<div style="padding:20px;color:var(--text-muted);">没有符合条件的人格</div>';
+  list.innerHTML = html;
+}
+
+// ===== 判定渲染 =====
+function renderJudgments() {
+  const activeEl = document.getElementById('activeJudgments');
+  const supportEl = document.getElementById('supportJudgments');
+  const mode = state.judgmentMode;
+
+  function renderItem(i, isSupport) {
+    const p = state.team[i];
+    if (!p) return '';
+    const j = judgeOne(p, isSupport);
+    let resultHtml = '';
+    if (j.status === 'pending') {
+      resultHtml = '<span class="judgment-result-a result-pending">待标注类型/数量</span>';
+    } else if (j.status === 'ok' && j.label === '常时触发') {
+      resultHtml = '<span class="judgment-result-a result-ok">常时触发</span>';
+    } else {
+      if (mode === 'A' || mode === 'both') {
+        if (j.A) {
+          resultHtml += `<span class="judgment-result-a result-ok">A: ${j.haveA}人≥${j.need} ✓ 资源充足</span>`;
+        } else {
+          resultHtml += `<span class="judgment-result-a result-fail">A: 资源不足 ✗ 缺少: ${j.failA.length?j.failA.join('、'):'未知'}</span>`;
+        }
+      }
+      if (mode === 'B' || mode === 'both') {
+        if (j.B) {
+          resultHtml += `<span class="judgment-result-b result-ok">B: ${j.haveB}张≥${j.need} ✓ 资源充足</span>`;
+        } else {
+          resultHtml += `<span class="judgment-result-b result-fail">B: 资源不足 ✗ 缺少: ${j.failB.length?j.failB.join('、'):'未知'}</span>`;
+        }
+      }
+      // C: 多回合（运气最好）——0=已满足绿 / 有缺口黄 / 无法产出红
+      if (state.judgeC !== false && j.C !== undefined) {
+        if (j.C === 0) {
+          resultHtml += `<span class="judgment-result-c result-ok">C: ✓ 已满足</span>`;
+        } else if (j.C !== null) {
+          resultHtml += `<span class="judgment-result-c result-warn">C: ⚠ 约${j.C}回合(运气最好)</span>`;
+        } else {
+          resultHtml += `<span class="judgment-result-c result-fail">C: 无法触发(缺: ${j.CImpossible.join('、')})</span>`;
+        }
+      }
+      // D: 多回合（P自动期望）——0=已满足绿 / 有缺口黄 / 无法产出红
+      if (state.judgeD !== false && j.D !== undefined) {
+        if (j.D === 0) {
+          resultHtml += `<span class="judgment-result-d result-ok">D: ✓ 已满足</span>`;
+        } else if (j.D !== null) {
+          resultHtml += `<span class="judgment-result-d result-warn">D: ⚠ 期望约${j.D}回合</span>`;
+        } else {
+          resultHtml += `<span class="judgment-result-d result-fail">D: 无法触发(缺: ${j.DImpossible.join('、')})</span>`;
+        }
+      }
+    }
+    return `<div class="judgment-item">
+      <span class="judgment-slot-num">${i+1}</span>
+      <div class="judgment-persona">
+        <div class="judgment-persona-name">${p.role} · ${p.series}${p.title?' · '+p.title:''}</div>
+        <div class="judgment-passive-info">${isSupport?'支援被动':'战斗被动'} [${j.pType||'待标注'}] ${j.sin||''}${j.need?' ×'+j.need:''}</div>
+      </div>
+      <div class="judgment-result">${resultHtml}</div>
+    </div>`;
+  }
+
+  let activeHtml = '';
+  for (let i = 0; i < 7; i++) activeHtml += renderItem(i, false);
+  if (!state.team.slice(0,7).some(Boolean)) activeHtml = '<div class="judgment-empty">尚未编入上场人格</div>';
+  activeEl.innerHTML = activeHtml;
+
+  let supportHtml = '';
+  for (let i = 7; i < 12; i++) supportHtml += renderItem(i, true);
+  if (!state.team.slice(7).some(Boolean)) supportHtml = '<div class="judgment-empty">尚未编入候补人格</div>';
+  supportEl.innerHTML = supportHtml;
+}
+
+function setJudgmentMode(mode) {
+  state.judgmentMode = mode;
+  document.getElementById('judgeA').classList.toggle('active', mode==='A');
+  document.getElementById('judgeB').classList.toggle('active', mode==='B');
+  document.getElementById('judgeBoth').classList.toggle('active', mode==='both');
+  saveState(); renderJudgments();
+}
+function toggleJudgeCD(k) {
+  if (k === 'C') state.judgeC = !(state.judgeC !== false);
+  else state.judgeD = !(state.judgeD !== false);
+  document.getElementById('judgeC').classList.toggle('active', state.judgeC !== false);
+  document.getElementById('judgeD').classList.toggle('active', state.judgeD !== false);
+  saveState(); renderJudgments();
+}
+
+// ===== 筛选 =====
+function setFilterMode(mode) {
+  state.filters.filterMode = mode;
+  document.getElementById('modeIntersection').classList.toggle('active', mode==='intersection');
+  document.getElementById('modeUnion').classList.toggle('active', mode==='union');
+  renderPersonas();
+}
+
+function initFilters() {
+  const all = getAllPersonas();
+  const seriesSet = getSeriesOptions();
+  const seriesSel = document.getElementById('filterSeries');
+  seriesSel.innerHTML = '<option value="">全部</option>';
+  for (const s of seriesSet) seriesSel.innerHTML += `<option value="${s}">${s}</option>`;
+
+  const sinSel = document.getElementById('filterSin');
+  for (const s of SIN_LIST) sinSel.innerHTML += `<option value="${s}">${s}</option>`;
+
+  // 异常效果筛选（使用可配置选项）
+  const toggles = document.getElementById('filterEffectToggles');
+  toggles.innerHTML = '';
+  for (const e of getAttackEffectOptions()) {
+    toggles.innerHTML += `<button class="filter-toggle ${state.filters.effects.includes(e)?'active':''}" data-effect="${e}" onclick="toggleEffectFilter('${e}',this)">${e}</button>`;
+  }
+  // 特殊效果筛选
+  const specialToggles = document.getElementById('filterSpecialToggles');
+  specialToggles.innerHTML = '';
+  for (const e of getSpecialEffectOptions()) {
+    specialToggles.innerHTML += `<button class="filter-toggle ${state.filters.specialEffects.includes(e)?'active':''}" data-effect="${e}" onclick="toggleSpecialEffectFilter('${e}',this)">${e}</button>`;
+  }
+
+  // 新增人格表单的下拉
+  const roleSel = document.getElementById('newRole');
+  for (const r of ROLE_LIST) roleSel.innerHTML += `<option value="${r}">${r}</option>`;
+  // 技能罪孽复选组（最多7种，可多选）
+  for (let n = 1; n <= 3; n++) {
+    const box = document.getElementById('newSkill' + n + 'SinsBox');
+    if (!box) continue;
+    const old = document.getElementById('newSkill' + n + 'Sin');
+    const cur = old ? old.value : '';
+    box.innerHTML = '';
+    for (const s of SIN_LIST) {
+      const checked = cur === s;
+      box.innerHTML += `<label class="sin-check ${checked?'checked':''}"><input type="checkbox" value="${s}" ${checked?'checked':''} onchange="this.parentNode.classList.toggle('checked', this.checked)"><span class="sin-dot" style="background:${sinColor(s)}"></span>${s}</label>`;
+    }
+  }
+  // 守备技能罪孽复选组（最多7种，可多选）
+  const guardBox = document.getElementById('newGuardSinsBox');
+  if (guardBox) {
+    guardBox.innerHTML = '';
+    for (const s of SIN_LIST) {
+      const checked = false;
+      guardBox.innerHTML += `<label class="sin-check ${checked?'checked':''}"><input type="checkbox" value="${s}" ${checked?'checked':''} onchange="this.parentNode.classList.toggle('checked', this.checked)"><span class="sin-dot" style="background:${sinColor(s)}"></span>${s}</label>`;
+    }
+  }
+  // 被动资源筛选下拉
+  for (const id of ['filterPassiveSin','filterSupportSin']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    sel.innerHTML = '<option value="">全部</option>';
+    for (const s of SIN_LIST) sel.innerHTML += `<option value="${s}" style="color:${sinColor(s)}">${s}</option>`;
+  }
+  for (const id of ['newSkill1Type','newSkill2Type','newSkill3Type']) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">无</option>';
+    for (const t of TYPE_LIST) sel.innerHTML += `<option value="${t}">${t}</option>`;
+  }
+  // 系列下拉（1/2/3）
+  for (const id of ['newSeries1','newSeries2','newSeries3']) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">无</option>';
+    for (const s of getSeriesOptions()) sel.innerHTML += `<option value="${s}">${s}</option>`;
+  }
+  // 被动/支援罪孽下拉（1/2/3）
+  for (const id of ['newPassiveSin1','newPassiveSin2','newPassiveSin3','newSupportSin1','newSupportSin2','newSupportSin3']) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">无</option>';
+    for (const s of SIN_LIST) sel.innerHTML += `<option value="${s}">${s}</option>`;
+  }
+  // 攻击效果下拉（1/2/3）
+  for (const id of ['newEffect1','newEffect2','newEffect3','newEffect4','newEffect5','newEffect6','newEffect6']) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">无</option>';
+    for (const e of getAttackEffectOptions()) sel.innerHTML += `<option value="${e}">${e}</option>`;
+  }
+  // 特殊效果下拉（1/2/3/4/5）
+  for (const spId of ['newSpecial','newSpecial2','newSpecial3','newSpecial4','newSpecial5','newSpecial6','newSpecial6']) {
+    const specialSel = document.getElementById(spId);
+    specialSel.innerHTML = '<option value="">无</option>';
+    for (const e of getSpecialEffectOptions()) specialSel.innerHTML += `<option value="${e}">${e}</option>`;
+  }
+  // EGO 表单下拉
+  const egoRaritySel = document.getElementById('newEgoRarity');
+  if (egoRaritySel) {
+    egoRaritySel.innerHTML = '';
+    for (const r of EGO_RARITIES) egoRaritySel.innerHTML += `<option value="${r}" style="color:${EGO_RARITY_COLORS[r]}">${r}</option>`;
+  }
+  const egoSinSel = document.getElementById('newEgoSin');
+  if (egoSinSel) {
+    egoSinSel.innerHTML = '<option value="">无</option>';
+    for (const s of SIN_LIST) egoSinSel.innerHTML += `<option value="${s}" style="color:${sinColor(s)}">${s}</option>`;
+  }
+  const egoTypeSel = document.getElementById('newEgoSkillType');
+  if (egoTypeSel) {
+    egoTypeSel.innerHTML = '<option value="">无</option>';
+    for (const t of TYPE_LIST) egoTypeSel.innerHTML += `<option value="${t}">${t}</option>`;
+  }
+  for (const egoEffId of ['newEgoEffect1','newEgoEffect2','newEgoEffect3','newEgoEffect4','newEgoEffect5','newEgoEffect6']) {
+    const egoEffSel = document.getElementById(egoEffId);
+    if (egoEffSel) {
+      egoEffSel.innerHTML = '<option value="">无</option>';
+      for (const e of getAttackEffectOptions()) egoEffSel.innerHTML += `<option value="${e}">${e}</option>`;
+    }
+  }
+  for (const egoSpId of ['newEgoSpecial','newEgoSpecial2','newEgoSpecial3','newEgoSpecial4','newEgoSpecial5','newEgoSpecial6']) {
+    const egoSpSel = document.getElementById(egoSpId);
+    if (egoSpSel) {
+      egoSpSel.innerHTML = '<option value="">无</option>';
+      for (const e of getSpecialEffectOptions()) egoSpSel.innerHTML += `<option value="${e}">${e}</option>`;
+    }
+  }
+}
+function refreshFormSelects() {
+  // 刷新系列、攻击效果、特殊效果下拉框选项（在添加自定义选项后调用）
+  for (const id of ['newSeries1','newSeries2','newSeries3']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">无</option>';
+    for (const s of getSeriesOptions()) sel.innerHTML += `<option value="${s}">${s}</option>`;
+    sel.value = cur;
+  }
+  for (const id of ['newEffect1','newEffect2','newEffect3','newEffect4','newEffect5','newEffect6']) {
+    const sel = document.getElementById(id);
+    if (!sel) continue;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">无</option>';
+    for (const e of getAttackEffectOptions()) sel.innerHTML += `<option value="${e}">${e}</option>`;
+    sel.value = cur;
+  }
+  for (const spId of ['newSpecial','newSpecial2','newSpecial3','newSpecial4','newSpecial5','newSpecial6']) {
+    const specialSel = document.getElementById(spId);
+    if (!specialSel) continue;
+    const curSpecial = specialSel.value;
+    specialSel.innerHTML = '<option value="">无</option>';
+    for (const e of getSpecialEffectOptions()) specialSel.innerHTML += `<option value="${e}">${e}</option>`;
+    specialSel.value = curSpecial;
+  }
+  // EGO 效果下拉同步
+  for (const egoEffId of ['newEgoEffect1','newEgoEffect2','newEgoEffect3','newEgoEffect4','newEgoEffect5','newEgoEffect6']) {
+    const egoEffSel = document.getElementById(egoEffId);
+    if (egoEffSel) {
+      const curEff = egoEffSel.value;
+      egoEffSel.innerHTML = '<option value="">无</option>';
+      for (const e of getAttackEffectOptions()) egoEffSel.innerHTML += `<option value="${e}">${e}</option>`;
+      egoEffSel.value = curEff;
+    }
+  }
+  for (const egoSpId of ['newEgoSpecial','newEgoSpecial2','newEgoSpecial3','newEgoSpecial4','newEgoSpecial5','newEgoSpecial6']) {
+    const egoSpSel = document.getElementById(egoSpId);
+    if (egoSpSel) {
+      const curSp = egoSpSel.value;
+      egoSpSel.innerHTML = '<option value="">无</option>';
+      for (const e of getSpecialEffectOptions()) egoSpSel.innerHTML += `<option value="${e}">${e}</option>`;
+      egoSpSel.value = curSp;
+    }
+  }
+  // 同步更新所有可搜索输入框的显示值
+  const editIds = ['newStar','newSeries1','newSeries2','newSeries3',
+    'newPassiveType','newSupportType',
+    'newEffect1','newEffect2','newEffect3',
+    'newSpecial',
+    'newSkill1Type','newSkill2Type','newSkill3Type',
+    'newPassiveSin1','newPassiveSin2','newPassiveSin3',
+    'newSupportSin1','newSupportSin2','newSupportSin3'];
+  for (const id of editIds) updateSearchableInput(id);
+}
+function refreshSeriesOptions() {
+  const all = getAllPersonas();
+  const seriesSet = new Set();
+  for (const p of all) {
+    for (const s of getSeriesList(p.series)) seriesSet.add(s);
+  }
+  const container = document.getElementById('newSeriesGroup');
+  if (!container) return;
+  container.innerHTML = '';
+  for (const s of [...seriesSet].sort()) {
+    container.innerHTML += `<label><input type="checkbox" value="${s}"> ${s}</label>`;
+  }
+}
+function getCheckedValues(containerId) {
+  return Array.from(document.querySelectorAll('#' + containerId + ' input:checked')).map(cb => cb.value);
+}
+function setCheckedValues(containerId, values) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const valSet = new Set(values);
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.checked = valSet.has(cb.value);
+  });
+}
+
+function toggleEffectFilter(effect, btn) {
+  const idx = state.filters.effects.indexOf(effect);
+  if (idx >= 0) state.filters.effects.splice(idx, 1);
+  else state.filters.effects.push(effect);
+  btn.classList.toggle('active', idx < 0);
+  renderPersonas();
+}
+function toggleSpecialEffectFilter(effect, btn) {
+  const idx = state.filters.specialEffects.indexOf(effect);
+  if (idx >= 0) state.filters.specialEffects.splice(idx, 1);
+  else state.filters.specialEffects.push(effect);
+  btn.classList.toggle('active', idx < 0);
+  renderPersonas();
+}
+
+// 监听筛选下拉
+document.addEventListener('change', e => {
+  if (e.target.id === 'filterSeries') state.filters.series = e.target.value;
+  if (e.target.id === 'filterStar') state.filters.star = e.target.value;
+  if (e.target.id === 'filterSin') state.filters.sin = e.target.value;
+  if (e.target.id === 'filterPassiveType') state.filters.passiveType = e.target.value;
+  if (e.target.id === 'filterSupportType') state.filters.supportType = e.target.value;
+  if (e.target.id === 'filterPassiveSin') state.filters.passiveSin = e.target.value;
+  if (e.target.id === 'filterSupportSin') state.filters.supportSin = e.target.value;
+  if (['filterSeries','filterStar','filterSin','filterPassiveType','filterSupportType','filterPassiveSin','filterSupportSin'].includes(e.target.id)) {
+    renderPersonas();
+  }
+});
+
+// ===== 模态框 =====
+function openModal(id) {
+  document.getElementById(id).classList.add('show');
+  if (id === 'settingsModal') { initSinColorGrid(); initEffectColorGrid(); updateFontScaleUI(); }
+}
+function resetAddPersonaForm() {
+  editingPersonaIndex = -1;
+  document.getElementById('addPersonaTitle').textContent = '新增人格';
+  document.getElementById('addPersonaSubmitBtn').textContent = '添加';
+  document.getElementById('deletePersonaBtn').style.display = 'none';
+  // 重置所有可搜索输入框
+  const editIds = ['newRole','newStar','newSeries1','newSeries2','newSeries3',
+    'newPassiveType','newSupportType','newEffect1','newEffect2','newEffect3','newEffect4','newEffect5','newEffect6',
+    'newSpecial','newSpecial2','newSpecial3','newSpecial4','newSpecial5','newSpecial6','newSkill1Type','newSkill2Type','newSkill3Type',
+    'newGuardType',
+    'newPassiveSin1','newPassiveSin2','newPassiveSin3',
+    'newSupportSin1','newSupportSin2','newSupportSin3'];
+  for (const id of editIds) {
+    const sel = document.getElementById(id);
+    if (sel) {
+      sel.selectedIndex = 0;
+      updateSearchableInput(id);
+    }
+  }
+  // 清空技能罪孽复选组
+  for (let n = 1; n <= 3; n++) {
+    const box = document.getElementById('newSkill' + n + 'SinsBox');
+    if (!box) continue;
+    for (const cb of box.querySelectorAll('input')) { cb.checked = false; cb.parentNode.classList.remove('checked'); }
+  }
+  // 清空守备罪孽复选组
+  const gBox = document.getElementById('newGuardSinsBox');
+  if (gBox) for (const cb of gBox.querySelectorAll('input')) { cb.checked = false; cb.parentNode.classList.remove('checked'); }
+  // 重置文本输入框
+  const textIds = ['newTitle','newPassiveCount1','newPassiveCount2','newPassiveCount3',
+    'newSupportCount1','newSupportCount2','newSupportCount3',
+    'newSupportEffect','newBuffActive','newBuffPassive'];
+  for (const id of textIds) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// 点击遮罩关闭
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('show'); });
+});
+
+// ===== 新增人格 / 编辑人格 =====
+function editCurrentPersona() {
+  const all = getAllPersonas();
+  if (currentDetailIndex < 0 || currentDetailIndex >= all.length) { return; }
+  editingPersonaIndex = currentDetailIndex;
+  const p = all[editingPersonaIndex];
+  document.getElementById('addPersonaTitle').textContent = '编辑人格';
+  document.getElementById('addPersonaSubmitBtn').textContent = '保存';
+  document.getElementById('deletePersonaBtn').style.display = 'inline-block';
+  document.getElementById('newRole').value = p.role || '';
+  document.getElementById('newStar').value = p.star || '';
+  // 填充系列
+  const sList = p.series || [];
+  for (let i = 0; i < 3; i++) document.getElementById('newSeries'+(i+1)).value = sList[i] || '';
+  document.getElementById('newTitle').value = p.title || '';
+  // 填充战斗被动
+  const pSins = p.passive_sins || [];
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('newPassiveSin'+(i+1)).value = pSins[i]?.sin || '';
+    document.getElementById('newPassiveCount'+(i+1)).value = pSins[i]?.count || '';
+  }
+  document.getElementById('newPassiveType').value = p.passive_type || '';
+  document.getElementById('newPassiveEffect').value = p.passive_effect || '';
+  // 填充支援被动
+  const sSins = p.support_sins || [];
+  for (let i = 0; i < 3; i++) {
+    document.getElementById('newSupportSin'+(i+1)).value = sSins[i]?.sin || '';
+    document.getElementById('newSupportCount'+(i+1)).value = sSins[i]?.count || '';
+  }
+  document.getElementById('newSupportType').value = p.support_type || '';
+  document.getElementById('newSupportEffect').value = p.support_effect || '';
+  document.getElementById('newSkill1Type').value = p.skill1_type || '';
+  document.getElementById('newSkill2Type').value = p.skill2_type || '';
+  document.getElementById('newSkill3Type').value = p.skill3_type || '';
+  // 技能罪孽复选组回填（兼容旧单值字段）
+  for (let n = 1; n <= 3; n++) {
+    const box = document.getElementById('newSkill' + n + 'SinsBox');
+    if (!box) continue;
+    const vals = getSkillSins(p, n);
+    for (const cb of box.querySelectorAll('input')) {
+      cb.checked = vals.includes(cb.value);
+      cb.parentNode.classList.toggle('checked', cb.checked);
+    }
+  }
+  document.getElementById('newGuardType').value = p.guard_type || '';
+  const gBox = document.getElementById('newGuardSinsBox');
+  if (gBox) {
+    const guardVals = getGuardSins(p);
+    for (const cb of gBox.querySelectorAll('input')) {
+      cb.checked = guardVals.includes(cb.value);
+      cb.parentNode.classList.toggle('checked', cb.checked);
+    }
+  }
+  document.getElementById('newEffect1').value = p.attack_effect1 || '';
+  document.getElementById('newEffect2').value = p.attack_effect2 || '';
+  document.getElementById('newEffect3').value = p.attack_effect3 || '';
+  document.getElementById('newEffect4').value = p.attack_effect4 || '';
+  document.getElementById('newEffect5').value = p.attack_effect5 || '';
+  document.getElementById('newEffect6').value = p.attack_effect6 || '';
+  const pSpecials = getPersonaSpecials(p);
+  document.getElementById('newSpecial').value = pSpecials[0] || '';
+  document.getElementById('newSpecial2').value = pSpecials[1] || '';
+  document.getElementById('newSpecial3').value = pSpecials[2] || '';
+  document.getElementById('newSpecial4').value = pSpecials[3] || '';
+  document.getElementById('newSpecial5').value = pSpecials[4] || '';
+  document.getElementById('newSpecial6').value = pSpecials[5] || '';
+  closeModal('detailModal');
+  openModal('addPersonaModal');
+  // 同步更新可搜索输入框显示
+  setTimeout(() => {
+    for (const id of ['newStar','newSeries1','newSeries2','newSeries3',
+      'newPassiveType','newSupportType','newEffect1','newEffect2','newEffect3','newEffect4','newEffect5',
+      'newSpecial','newSpecial2','newSpecial3','newSpecial4','newSpecial5','newSkill1Type','newSkill2Type','newSkill3Type',
+      'newPassiveSin1','newPassiveSin2','newPassiveSin3',
+      'newSupportSin1','newSupportSin2','newSupportSin3']) {
+      updateSearchableInput(id);
+    }
+  }, 50);
+}
+
+function addPersona() {
+  const p = {
+    role: document.getElementById('newRole').value,
+    star: document.getElementById('newStar').value,
+    series: (() => { const arr = []; for (const id of ['newSeries1','newSeries2','newSeries3']) { const v = document.getElementById(id).value; if (v) arr.push(v); } return arr; })(),
+    title: document.getElementById('newTitle').value,
+    passive_type: document.getElementById('newPassiveType').value,
+    passive_sins: (() => { const arr = []; for (let i = 1; i <= 3; i++) { const sin = document.getElementById('newPassiveSin'+i).value; const count = document.getElementById('newPassiveCount'+i).value; if (sin) arr.push({sin, count: parseInt(count)||0}); } return arr; })(),
+    support_type: document.getElementById('newSupportType').value,
+    support_sins: (() => { const arr = []; for (let i = 1; i <= 3; i++) { const sin = document.getElementById('newSupportSin'+i).value; const count = document.getElementById('newSupportCount'+i).value; if (sin) arr.push({sin, count: parseInt(count)||0}); } return arr; })(),
+    support_effect: document.getElementById('newSupportEffect').value,
+    passive_effect: document.getElementById('newPassiveEffect').value,
+    skill1_type: document.getElementById('newSkill1Type').value,
+    skill1_sin: getCheckedValues('newSkill1SinsBox')[0] || '',
+    skill1_sins: getCheckedValues('newSkill1SinsBox'),
+    skill2_type: document.getElementById('newSkill2Type').value,
+    skill2_sin: getCheckedValues('newSkill2SinsBox')[0] || '',
+    skill2_sins: getCheckedValues('newSkill2SinsBox'),
+    skill3_type: document.getElementById('newSkill3Type').value,
+    skill3_sin: getCheckedValues('newSkill3SinsBox')[0] || '',
+    skill3_sins: getCheckedValues('newSkill3SinsBox'),
+    guard_type: document.getElementById('newGuardType').value,
+    guard_sin: getCheckedValues('newGuardSinsBox')[0] || '',
+    guard_sins: getCheckedValues('newGuardSinsBox'),
+    attack_effect1: document.getElementById('newEffect1').value,
+    attack_effect2: document.getElementById('newEffect2').value,
+    attack_effect3: document.getElementById('newEffect3').value,
+    attack_effect4: document.getElementById('newEffect4').value,
+    attack_effect5: document.getElementById('newEffect5').value,
+    attack_effect6: document.getElementById('newEffect6').value,
+    special_effect1: document.getElementById('newSpecial').value,
+    special_effect2: document.getElementById('newSpecial2').value,
+    special_effect3: document.getElementById('newSpecial3').value,
+    special_effect4: document.getElementById('newSpecial4').value,
+    special_effect5: document.getElementById('newSpecial5').value,
+    special_effect6: document.getElementById('newSpecial6').value,
+    special_effect: document.getElementById('newSpecial').value,
+    buff_active: '', buff_passive: ''
+  };
+  if (!p.role || !p.series) { return; }
+  if (editingPersonaIndex >= 0) {
+    const all = getAllPersonas();
+    if (editingPersonaIndex < DEFAULT_PERSONAS.length) {
+      // 编辑默认人格：创建副本放入 customPersonas 并标记，已有副本则更新
+      p._editedDefault = true;
+      p._defaultIndex = editingPersonaIndex;
+      const existingIdx = state.customPersonas.findIndex(cp => cp._defaultIndex === editingPersonaIndex);
+      if (existingIdx >= 0) {
+        state.customPersonas[existingIdx] = p;
+      } else {
+        state.customPersonas.push(p);
+      }
+    } else {
+      state.customPersonas[editingPersonaIndex - DEFAULT_PERSONAS.length] = p;
+    }
+    // 更新编队中的引用
+    for (let ti = 0; ti < state.team.length; ti++) {
+      if (!state.team[ti]) continue;
+      const tp = state.team[ti];
+      if (editingPersonaIndex < DEFAULT_PERSONAS.length) {
+        if (tp === all[editingPersonaIndex] || tp._defaultIndex === editingPersonaIndex) {
+          state.team[ti] = p;
+        }
+      } else {
+        if (tp === all[editingPersonaIndex]) {
+          state.team[ti] = p;
+        }
+      }
+    }
+    editingPersonaIndex = -1;
+
+  } else {
+    state.customPersonas.push(p);
+
+  }
+  saveState();
+  closeModal('addPersonaModal');
+  document.getElementById('addPersonaTitle').textContent = '新增人格';
+  document.getElementById('addPersonaSubmitBtn').textContent = '添加';
+  document.getElementById('deletePersonaBtn').style.display = 'none';
+  document.querySelectorAll('#addPersonaModal input[type="text"], #addPersonaModal input[type="number"], #addPersonaModal textarea').forEach(el => el.value = '');
+  document.querySelectorAll('#addPersonaModal select').forEach(el => el.selectedIndex = 0);
+  renderAll();
+}
+
+// ===== 删除人格 =====
+function deletePersona() {
+  if (editingPersonaIndex < 0) return;
+  if (!confirm('确定删除此人格？')) return;
+  const all = getAllPersonas();
+  const p = all[editingPersonaIndex];
+  if (editingPersonaIndex < DEFAULT_PERSONAS.length) {
+    // 默认人格：移除编辑副本，恢复默认
+    state.customPersonas = state.customPersonas.filter(cp => cp._defaultIndex !== editingPersonaIndex);
+
+  } else {
+    // 自定义人格：用对象引用定位删除，避免索引偏移
+    const customIdx = state.customPersonas.indexOf(p);
+    if (customIdx >= 0) {
+      state.customPersonas.splice(customIdx, 1);
+    } else {
+      // 兜底：按索引删除
+      state.customPersonas.splice(editingPersonaIndex - DEFAULT_PERSONAS.length, 1);
+    }
+    for (let ti = 0; ti < state.team.length; ti++) {
+      if (state.team[ti] === p) state.team[ti] = null;
+    }
+
+  }
+  editingPersonaIndex = -1;
+  saveState();
+  closeModal('addPersonaModal');
+  document.getElementById('addPersonaTitle').textContent = '新增人格';
+  document.getElementById('addPersonaSubmitBtn').textContent = '添加';
+  document.getElementById('deletePersonaBtn').style.display = 'none';
+  renderAll();
+}
+
+// ===== 筛选器刷新 =====
+function initFilterSeries() {
+  const seriesSel = document.getElementById('filterSeries');
+  if (!seriesSel) return;
+  const cur = seriesSel.value;
+  seriesSel.innerHTML = '<option value="">全部</option>';
+  for (const s of getSeriesOptions()) seriesSel.innerHTML += `<option value="${s}">${s}</option>`;
+  seriesSel.value = cur;
+  updateSearchableInput('filterSeries');
+}
+function initFilterEffects() {
+  // 刷新异常效果 toggle
+  const toggles = document.getElementById('filterEffectToggles');
+  if (toggles) {
+    toggles.innerHTML = '';
+    for (const e of getAttackEffectOptions()) {
+      toggles.innerHTML += `<button class="filter-toggle ${state.filters.effects.includes(e)?'active':''}" data-effect="${e}" onclick="toggleEffectFilter('${e}',this)">${e}</button>`;
+    }
+  }
+  // 刷新特殊效果 toggle
+  const specialToggles = document.getElementById('filterSpecialToggles');
+  if (specialToggles) {
+    specialToggles.innerHTML = '';
+    for (const e of getSpecialEffectOptions()) {
+      specialToggles.innerHTML += `<button class="filter-toggle ${state.filters.specialEffects.includes(e)?'active':''}" data-effect="${e}" onclick="toggleSpecialEffectFilter('${e}',this)">${e}</button>`;
+    }
+  }
+}
+
+
+// ===== 可搜索下拉框 =====
+function convertToSearchable(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select || select.dataset.searchableConv === 'true') return;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'searchable-select';
+  // 首页筛选区的系列框保持较短宽度，编辑界面的系列框自适应父容器宽度
+  if (selectId === 'filterSeries') {
+    wrapper.style.width = '8em';
+    wrapper.style.flex = 'none';
+  }
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'searchable-input';
+  input.placeholder = '点击选择或输入筛选...';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  const curOpt = select.options[select.selectedIndex];
+  input.value = (curOpt && curOpt.value !== '') ? curOpt.text : '';
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'searchable-dropdown';
+
+  select.parentNode.insertBefore(wrapper, select);
+  wrapper.appendChild(input);
+  wrapper.appendChild(dropdown);
+  select.style.display = 'none';
+  select.dataset.searchableConv = 'true';
+
+  function renderOptions(filter) {
+    dropdown.innerHTML = '';
+    // 不过滤 value 为空的选项（如"全部"），保留所有选项
+    const options = Array.from(select.options);
+    const f = (filter || '').trim().toLowerCase();
+    const filtered = f ? options.filter(o => o.text.toLowerCase().includes(f)) : options;
+    if (filtered.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'searchable-option empty';
+      empty.textContent = '无匹配选项';
+      dropdown.appendChild(empty);
+    } else {
+      for (const opt of filtered) {
+        const div = document.createElement('div');
+        div.className = 'searchable-option' + (opt.value === select.value ? ' selected' : '');
+        div.textContent = opt.text;
+        // 用 mousedown + preventDefault 防止点击选项时 input 失去焦点
+        div.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          select.value = opt.value;
+          input.value = opt.text;
+          dropdown.classList.remove('open');
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        dropdown.appendChild(div);
+      }
+    }
+  }
+
+  // focus 时展开下拉
+  input.addEventListener('focus', function() {
+    renderOptions(input.value);
+    dropdown.classList.add('open');
+  });
+
+  // 输入时实时过滤（中文输入也能正常工作）
+  input.addEventListener('input', function() {
+    renderOptions(input.value);
+    dropdown.classList.add('open');
+  });
+
+  // 点击外部关闭，并恢复输入框的值
+  document.addEventListener('mousedown', function(e) {
+    if (!wrapper.contains(e.target)) {
+      dropdown.classList.remove('open');
+      const so = select.options[select.selectedIndex];
+      input.value = (so && so.value !== '') ? so.text : '';
+    }
+  });
+
+  // 回车选中第一个匹配项，ESC 关闭
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const firstOpt = dropdown.querySelector('.searchable-option:not(.empty)');
+      if (firstOpt) firstOpt.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    } else if (e.key === 'Escape') {
+      dropdown.classList.remove('open');
+      input.blur();
+    }
+  });
+
+  select._searchable = { input: input, dropdown: dropdown, renderOptions: renderOptions };
+}
+
+function updateSearchableInput(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select || !select._searchable) return;
+  const { input } = select._searchable;
+  const so = select.options[select.selectedIndex];
+  input.value = (so && so.value !== '') ? so.text : '';
+}
+
+function initAllSearchableSelects() {
+  // 只转换系列相关的下拉框（系列选项多，需要搜索过滤）
+  // 其他下拉框选项少，保持普通 select
+  const ids = [
+    'filterSeries',
+    'newSeries1','newSeries2','newSeries3',
+  ];
+  for (const id of ids) convertToSearchable(id);
+}
+
+// ===== 编队清空 =====
+function clearTeamSection(start, end) {
+  const label = start === 0 ? '上场区' : '候补区';
+  for (let i = start; i < end; i++) {
+    state.team[i] = null;
+  }
+  saveState();
+  renderAll();
+}
+// 重置：清空上场/候补区 + 所有已装备EGO
+function resetTeamAndEgos() {
+  if (!confirm('确定重置队伍？将清空上场/候补区所有人格及所有已装备EGO。')) return;
+  state.team = new Array(12).fill(null);
+  state.personaEgos = {};
+  saveState();
+  renderAll();
+}
+// 重置筛选：全部回到未筛选状态
+function resetFilters() {
+  state.filters.series = '';
+  state.filters.star = '';
+  state.filters.sin = '';
+  state.filters.effects = [];
+  state.filters.specialEffects = [];
+  state.filters.passiveType = '';
+  state.filters.supportType = '';
+  state.filters.passiveSin = '';
+  state.filters.supportSin = '';
+  saveState();
+  // 重置静态下拉
+  for (const id of ['filterStar','filterSin','filterPassiveType','filterPassiveSin','filterSupportType','filterSupportSin']) {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  }
+  initFilters();
+  renderPersonas();
+}
+
+// ===== 选项管理 =====
+function openOptionsManager() {
+  document.getElementById('optionsModal').classList.add('show');
+  const listEl = document.getElementById('customOptionsList');
+  if (listEl && !listEl.dataset.delegated) {
+    listEl.dataset.delegated = '1';
+    listEl.addEventListener('click', function(e) {
+      const item = e.target && e.target.closest ? e.target.closest('.opt-drag-item') : null;
+      if (item && item.dataset && item.dataset.opt) {
+        selectOpt(decodeURIComponent(item.dataset.opt));
+      }
+    });
+  }
+  renderCustomOptions();
+}
+let selectedOpt = null;
+function renderCustomOptions() {
+  const type = document.getElementById('optType').value;
+  const list = document.getElementById('customOptionsList');
+  const defaults = type === 'attackEffects' ? DEFAULT_ATTACK_EFFECTS : (type === 'specialEffects' ? DEFAULT_SPECIAL_EFFECTS : []);
+  const customs = state.customOptions[type] || [];
+  const visibleOptions = getOrderedOptions(type);
+
+  if (selectedOpt && !visibleOptions.includes(selectedOpt)) selectedOpt = null;
+  updateOptHint();
+
+  let html = '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary);">当前选项（点击选项选中，用上方 ↑↓ 按钮调整顺序、“删除”按钮删除；删除后不再出现）：</div>';
+  html += '<div class="custom-options-grid">';
+  if (visibleOptions.length === 0) html += '<span style="color:var(--text-muted);font-size:12px;">暂无选项，可在上方输入添加</span>';
+  for (const opt of visibleOptions) {
+    const isCustom = customs.includes(opt) && !defaults.includes(opt);
+    const tagStyle = isCustom ? 'border-color:var(--accent-gold);' : '';
+    const selCls = selectedOpt === opt ? ' opt-selected' : '';
+    html += `<div class="opt-drag-item${selCls}" data-opt="${encodeURIComponent(opt)}" title="点击选中，用上方按钮调整或删除" style="cursor:pointer;${tagStyle}"><span class="opt-name">${opt}</span></div>`;
+  }
+  html += '</div>';
+  list.innerHTML = html;
+}
+function selectOpt(name) {
+  selectedOpt = (selectedOpt === name) ? null : name;
+  renderCustomOptions();
+}
+function moveSelectedOption(delta) {
+  const type = document.getElementById('optType').value;
+  if (!selectedOpt) { updateOptHint(); return; }
+  const visible = getOrderedOptions(type);
+  const idx = visible.indexOf(selectedOpt);
+  if (idx < 0) { selectedOpt = null; updateOptHint(); renderCustomOptions(); return; }
+  const to = idx + delta;
+  if (to < 0 || to >= visible.length) return;
+  visible.splice(idx, 1);
+  visible.splice(to, 0, selectedOpt);
+  if (!state.customOptions.order) state.customOptions.order = { attackEffects: [], specialEffects: [], series: [] };
+  state.customOptions.order[type] = visible;
+  saveState();
+  try { renderCustomOptions(); } catch(e) {}
+  try { refreshFormSelects(); } catch(e) {}
+  try { initFilterEffects(); } catch(e) {}
+  try { initFilterSeries(); } catch(e) {}
+}
+function deleteSelectedOption() {
+  if (!selectedOpt) { updateOptHint(); return; }
+  const type = document.getElementById('optType').value;
+  const name = selectedOpt;
+  selectedOpt = null;
+  deleteOption(type, name);
+  updateOptHint();
+}
+function updateOptHint() {
+  const el = document.getElementById('optSelectedHint');
+  if (el) el.textContent = selectedOpt ? ('已选中：' + selectedOpt + '（↑↓ 调整位置，删除按钮删除）') : '未选中选项（点击下方选项选中）';
+}
+function normOpt(s) {
+  // 规范化：去除零宽字符、BOM、不间断空格及首尾空白，用于兼容早期录入的隐藏字符
+  return String(s == null ? '' : s).replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '').trim();
+}
+function deleteOption(type, opt) {
+  let removed = false;
+  try {
+    const defaults = type === 'attackEffects' ? DEFAULT_ATTACK_EFFECTS : (type === 'specialEffects' ? DEFAULT_SPECIAL_EFFECTS : []);
+    const isDefault = defaults.includes(opt) || defaults.some(d => normOpt(d) === normOpt(opt));
+    const customArr = state.customOptions[type] || [];
+    // 自定义选项：优先精确匹配，匹配不到时用规范化匹配（兼容带隐藏字符的旧数据）
+    let customIdx = customArr.indexOf(opt);
+    if (customIdx < 0) {
+      customIdx = customArr.findIndex(o => normOpt(o) === normOpt(opt));
+    }
+    if (customIdx >= 0) {
+      const realName = customArr[customIdx];
+      state.customOptions[type].splice(customIdx, 1);
+      removed = true;
+      // 同步从 order 中移除同名项，避免残留
+      const orderArr = state.customOptions?.order?.[type];
+      if (Array.isArray(orderArr)) {
+        state.customOptions.order[type] = orderArr.filter(o => normOpt(o) !== normOpt(realName));
+      }
+      // 同步清理该效果的自定义颜色
+      if ((type === 'attackEffects' || type === 'specialEffects') && state.settings.effectColors) {
+        delete state.settings.effectColors[realName];
+      }
+    } else if (!isDefault) {
+      // 兜底：该选项可能只是 order 排序数组中的历史残留，直接从 order 移除
+      const orderArr = state.customOptions?.order?.[type] || [];
+      const oIdx = orderArr.findIndex(o => normOpt(o) === normOpt(opt));
+      if (oIdx >= 0) {
+        state.customOptions.order[type].splice(oIdx, 1);
+        removed = true;
+      }
+    }
+    // 默认选项或系列（从人格数据提取的）：标记为已删除，下拉框过滤掉
+    if (isDefault || type === 'series') {
+      if (!state.customOptions.hidden[type]) state.customOptions.hidden[type] = [];
+      if (!state.customOptions.hidden[type].includes(opt)) {
+        state.customOptions.hidden[type].push(opt);
+        removed = true;
+      }
+    }
+    if (removed) saveState();
+  } catch(e) { console.warn('删除异常', e); }
+  // 先刷新列表本身（保证删除立即可见），其余刷新各自独立，任一失败不影响删除
+  try { renderCustomOptions(); } catch(e) {}
+  try { refreshFormSelects(); } catch(e) {}
+  try { initFilterSeries(); } catch(e) {}
+  try { initFilterEffects(); } catch(e) {}
+  return removed;
+}
+
+function addCustomOption() {
+  const type = document.getElementById('optType').value;
+  const name = document.getElementById('optNewName').value.trim();
+  if (!name) return;
+  if (!state.customOptions[type]) state.customOptions[type] = [];
+  const dupIdx = state.customOptions[type].findIndex(o => normOpt(o) === normOpt(name));
+  if (dupIdx >= 0) {
+    // 若该选项之前被删除（在 hidden 列表中），则恢复显示而不是报重复
+    const realName = state.customOptions[type][dupIdx];
+    if (state.customOptions.hidden?.[type]?.some(h => normOpt(h) === normOpt(realName))) {
+      state.customOptions.hidden[type] = state.customOptions.hidden[type].filter(h => normOpt(h) !== normOpt(realName));
+      document.getElementById('optNewName').value = '';
+      saveState();
+      try { renderCustomOptions(); } catch(e) {}
+      try { refreshFormSelects(); } catch(e) {}
+      try { initFilterEffects(); } catch(e) {}
+      try { initFilterSeries(); } catch(e) {}
+      return;
+    }
+    return;
+  }
+  state.customOptions[type].push(name);
+  document.getElementById('optNewName').value = '';
+  saveState();
+  try { renderCustomOptions(); } catch(e) {}
+  try { refreshFormSelects(); } catch(e) {}
+  try { initFilterEffects(); } catch(e) {}
+  try { initFilterSeries(); } catch(e) {}
+}
+function removeCustomOption(type, idx) {
+  const removed = state.customOptions[type][idx];
+  state.customOptions[type].splice(idx, 1);
+  // 同时从隐藏列表中移除
+  if (state.customOptions.hidden[type]) {
+    state.customOptions.hidden[type] = state.customOptions.hidden[type].filter(o => o !== removed);
+  }
+  saveState();
+  refreshFormSelects();
+  renderCustomOptions();
+}
+
+// ===== 详情 =====
+function showDetail(idx) {
+  const all = getAllPersonas();
+  const p = all[idx];
+  if (!p) return;
+  currentDetailIndex = idx;
+  document.getElementById('detailTitle').textContent = `${p.star} ${p.series}${p.title?' · '+p.title:''} (${p.role})`;
+  let html = '<div class="detail-section"><h5>技能</h5>';
+  for (const [i, t, ss] of [['Ⅰ',p.skill1_type,getSkillSins(p,1)],['Ⅱ',p.skill2_type,getSkillSins(p,2)],['Ⅲ',p.skill3_type,getSkillSins(p,3)]]) {
+    html += `<div class="detail-row"><span class="label">技能${i}</span><span class="value">${t||'-'} ${ss.length?ss.map(s=>sinIcon(s)).join(''):'-'}</span></div>`;
+  }
+  const guardSinsD = getGuardSins(p);
+  if (p.guard_type || guardSinsD.length) {
+    html += `<div class="detail-row"><span class="label">守备技能</span><span class="value">${p.guard_type||'-'} ${guardSinsD.length?guardSinsD.map(s=>sinIcon(s)).join(''):'-'}</span></div>`;
+  }
+  html += '</div><div class="detail-section"><h5>被动</h5>';
+  const dPSinStr = (p.passive_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-';
+  const dSSinStr = (p.support_sins || []).map(s => s.sin + (s.count ? '\u00d7' + s.count : '')).join('+') || '-';
+  html += `<div class="detail-row"><span class="label">战斗被动</span><span class="value">[${p.passive_type||'待标注'}] ${colorize(dPSinStr)}</span></div>`;
+  html += `<div class="detail-row"><span class="label">支援被动</span><span class="value">[${p.support_type||'待标注'}] ${colorize(dSSinStr)}</span></div>`;
+  if (p.support_effect) html += `<div class="detail-row"><span class="label">支援效果</span><span class="value" style="color:#e8dcc8;">${p.support_effect}</span></div>`;
+  html += '</div><div class="detail-section"><h5>效果</h5>';
+  const effects = [...getPersonaEffects(p), ...getPersonaSpecials(p)];
+  html += `<div class="detail-row"><span class="label">异常/特殊</span><span class="value">${colorizeEffects(colorize(effects.join('、')||'无'))}</span></div>`;
+  html += '</div>';
+  document.getElementById('detailContent').innerHTML = html;
+  openModal('detailModal');
+}
+
+// ===== 罪孽颜色与直接编入 =====
+function sinColor(sin) {
+  return (state.settings.sinColors && state.settings.sinColors[sin]) || DEFAULT_SIN_COLORS[sin] || '';
+}
+function colorize(text) {
+  if (!text) return text;
+  let out = String(text);
+  for (const s of SIN_LIST) {
+    const c = sinColor(s);
+    if (c) out = out.split(s).join(`<span style="color:${c};font-weight:bold;">${s}</span>`);
+  }
+  return out;
+}
+function effectColor(name) {
+  return (state.settings.effectColors && state.settings.effectColors[name]) || '';
+}
+function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function colorizeEffects(text) {
+  if (!text) return text;
+  const ec = state.settings.effectColors || {};
+  const names = Object.keys(ec).filter(n => n && ec[n]);
+  if (!names.length) return String(text);
+  // 按名称长度降序，先匹配长名称（如"灼热震颤"先于"震颤"），单次扫描避免重复包裹
+  names.sort((a, b) => b.length - a.length);
+  const re = new RegExp(names.map(escapeRegExp).join('|'), 'g');
+  return String(text).replace(re, m => `<span style="color:${ec[m]};font-weight:bold;">${m}</span>`);
+}
+function addToTeamDirect(region) {
+  const all = getAllPersonas();
+  const p = all[currentDetailIndex];
+  if (!p) return;
+  // 同罪人限制：每位罪人只能编入一个人格
+  for (let i = 0; i < 12; i++) {
+    if (state.team[i] && state.team[i].role === p.role) {
+      return;
+    }
+  }
+  const start = region === 'active' ? 0 : 7;
+  const end = region === 'active' ? 7 : 12;
+  for (let i = start; i < end; i++) {
+    if (!state.team[i]) {
+      state.team[i] = p;
+      saveState(); renderAll();
+      closeModal('detailModal');
+      return;
+    }
+  }
+}
+
+
+// ===== 预设阵容 =====
+function savePresetDialog() {
+  renderPresetList();
+  openModal('savePresetModal');
+}
+function renderPresetList() {
+  const list = document.getElementById('presetList');
+  if (!state.presets.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">暂无保存的阵容</div>'; return; }
+  let html = '';
+  state.presets.forEach((p, i) => {
+    html += `<div class="preset-item">
+      <span class="preset-item-name">${p.name}</span>
+      <div class="preset-item-actions">
+        <button class="btn btn-sm" onclick="loadPresetByIdx(${i})">加载</button>
+        <button class="btn btn-sm btn-danger" onclick="deletePreset(${i})">删除</button>
+      </div>
+    </div>`;
+  });
+  list.innerHTML = html;
+  // 更新顶部下拉
+  const sel = document.getElementById('presetSelect');
+  sel.innerHTML = '<option value="">预设阵容...</option>';
+  state.presets.forEach((p, i) => sel.innerHTML += `<option value="${i}">${p.name}</option>`);
+}
+function savePreset() {
+  const name = document.getElementById('presetName').value.trim();
+  if (!name) { return; }
+  state.presets.push({ name, team: JSON.parse(JSON.stringify(state.team)) });
+  document.getElementById('presetName').value = '';
+  saveState(); renderPresetList();
+
+}
+function loadPreset(val) {
+  if (val === '') return;
+  const idx = parseInt(val);
+  loadPresetByIdx(idx);
+}
+function loadPresetByIdx(idx) {
+  state.team = JSON.parse(JSON.stringify(state.presets[idx].team));
+  saveState(); renderAll();
+  closeModal('savePresetModal');
+}
+function deletePreset(idx) {
+  state.presets.splice(idx, 1);
+  saveState(); renderPresetList();
+}
+
+// ===== 设置 =====
+function setBg(type) {
+  state.settings.bg = type;
+  state.settings.customBg = '';
+  document.querySelectorAll('.bg-preset').forEach(el => el.classList.remove('active'));
+  document.querySelector('.bg-preset.' + type).classList.add('active');
+  applyBg();
+  saveState();
+}
+function applyCustomBg() {
+  const url = document.getElementById('customBgUrl').value.trim();
+  if (!url) return;
+  state.settings.customBg = url;
+  state.settings.bg = 'custom';
+  document.querySelectorAll('.bg-preset').forEach(el => el.classList.remove('active'));
+  applyBg();
+  saveState();
+}
+function applyBg() {
+  document.body.classList.remove('custom-bg');
+  document.body.style.background = '';
+  if (state.settings.bg === 'custom' && state.settings.customBg) {
+    document.body.classList.add('custom-bg');
+    document.body.style.backgroundImage = `url(${state.settings.customBg})`;
+  } else if (state.settings.bg === 'parchment') {
+    document.body.style.background = 'linear-gradient(135deg, #2a1f15, #3a2a1e)';
+  } else if (state.settings.bg === 'night') {
+    document.body.style.background = 'linear-gradient(135deg, #0f1419, #1a2332)';
+  } else {
+    document.body.style.background = '';
+  }
+}
+
+function initSinColorGrid() {
+  const grid = document.getElementById('sinColorGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const sin of SIN_LIST) {
+    const c = sinColor(sin);
+    grid.innerHTML += `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <span style="font-size:13px;color:${c};font-weight:bold;">${sin}</span>
+      <input type="color" id="sinColorInput_${sin}" value="${c}" style="width:52px;height:30px;background:#3d2b1f;border:1px solid #8b6914;border-radius:4px;cursor:pointer;padding:2px;">
+    </div>`;
+  }
+}
+function saveSinColors() {
+  if (!state.settings.sinColors) state.settings.sinColors = {};
+  for (const sin of SIN_LIST) {
+    const inp = document.getElementById('sinColorInput_' + sin);
+    if (inp) state.settings.sinColors[sin] = inp.value;
+  }
+  saveState();
+  renderAll();
+
+}
+function resetSinColors() {
+  state.settings.sinColors = {};
+  saveState();
+  initSinColorGrid();
+  renderAll();
+}
+function initEffectColorGrid() {
+  const grid = document.getElementById('effectColorGrid');
+  if (!grid) return;
+  const names = [...new Set([...getAttackEffectOptions(), ...getSpecialEffectOptions()])];
+  const ec = state.settings.effectColors || {};
+  grid.innerHTML = '';
+  if (!names.length) { grid.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">暂无效果选项</span>'; return; }
+  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(5,auto);gap:10px;">';
+  names.forEach((n, i) => {
+    const c = ec[n] || '#d4a853';
+    grid.innerHTML += `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <span style="font-size:13px;color:${c};font-weight:bold;">${n}</span>
+      <input type="color" id="effCol_${i}" value="${c}" style="width:52px;height:30px;background:#3d2b1f;border:1px solid #8b6914;border-radius:4px;cursor:pointer;padding:2px;">
+    </div>`;
+  });
+  grid.innerHTML += '</div>';
+}
+function saveEffectColors() {
+  if (!state.settings.effectColors) state.settings.effectColors = {};
+  const names = [...new Set([...getAttackEffectOptions(), ...getSpecialEffectOptions()])];
+  names.forEach((n, i) => {
+    const col = document.getElementById('effCol_' + i);
+    if (col) state.settings.effectColors[n] = col.value;
+  });
+  saveState(); renderAll();
+
+}
+function resetEffectColors() {
+  state.settings.effectColors = {};
+  saveState(); initEffectColorGrid(); renderAll();
+}
+function changeFontScale(delta) {
+  const cur = state.settings.fontScale || 0;
+  const next = delta === 0 ? 0 : Math.max(-10, Math.min(10, cur + delta));
+  state.settings.fontScale = next;
+  saveState(); applyFontScale(); updateFontScaleUI();
+}
+function updateFontScaleUI() {
+  const s = state.settings.fontScale || 0;
+  const el = document.getElementById('fontScaleLabel');
+  if (el) el.textContent = s === 0 ? '默认' : (s > 0 ? '+' + s + ' 档' : s + ' 档');
+}
+function applyFontScale() {
+  const s = state.settings.fontScale || 0;
+  document.documentElement.style.zoom = (1 + s * 0.08).toFixed(3);
+}
+function initIconGrid() {
+  const grid = document.getElementById('iconGrid');
+  let html = '';
+  for (let i = 0; i < SIN_LIST.length; i++) {
+    const key = 'sin_' + SIN_KEYS[i];
+    const custom = state.settings.icons[key];
+    html += `<div class="icon-item">
+      ${custom ? `<img src="${custom}" class="custom-icon-preview">` : sinIcon(SIN_LIST[i])}
+      <span>${SIN_LIST[i]}</span>
+      <label class="icon-upload-btn">上传<input type="file" accept="image/*" onchange="uploadIcon('${key}',event)"></label>
+      ${custom ? `<button class="icon-upload-btn" onclick="resetIcon('${key}')">重置</button>` : ''}
+    </div>`;
+  }
+  grid.innerHTML = html;
+}
+function uploadIcon(key, e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.settings.icons[key] = ev.target.result;
+    saveState(); initIconGrid(); renderResourceBar(); renderTeam(); renderPersonas();
+  };
+  reader.readAsDataURL(file);
+}
+function resetIcon(key) {
+  delete state.settings.icons[key];
+  saveState(); initIconGrid(); renderResourceBar(); renderTeam(); renderPersonas();
+}
+
+// ===== 数据导入导出 =====
+function exportData() {
+  const data = {
+    customPersonas: state.customPersonas,
+    presets: state.presets,
+    settings: state.settings,
+    team: state.team,
+    customOptions: state.customOptions,
+    egos: state.egos,
+    personaEgos: state.personaEgos
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'limbus_team_data.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.customPersonas) state.customPersonas = data.customPersonas;
+      if (data.presets) state.presets = data.presets;
+      if (data.settings) state.settings = data.settings;
+      if (data.team) state.team = data.team;
+      if (data.customOptions) state.customOptions = data.customOptions;
+      if (data.egos) state.egos = data.egos;
+      if (data.personaEgos) state.personaEgos = data.personaEgos;
+      saveState();
+      // 重建筛选项/效果槽/下拉框，否则新导入的自定义标签不显示
+      if (typeof initFilters === 'function') initFilters();
+      if (typeof initAllSearchableSelects === 'function') initAllSearchableSelects();
+      renderAll();
+      alert('数据导入成功');
+    } catch(err) { alert('导入失败: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+function resetAll() {
+  if (!confirm('确定重置全部数据？这将清除自定义人格、预设阵容、设置和当前编队。')) return;
+  localStorage.removeItem('limbus_team_builder');
+  location.reload();
+}
+
+// ===== 总渲染 =====
+function renderAll() {
+  renderResourceBar();
+  renderTeam();
+  if (state.libraryView === 'sinners') renderSinnersGrid();
+  else if (state.libraryView === 'egos') {
+    document.getElementById('sinnersGrid').style.display = 'none';
+    document.getElementById('personasList').style.display = 'none';
+    document.getElementById('egosPage').style.display = 'block';
+    renderEgoPage(state.currentRole || '李箱');
+  }
+  else renderPersonas();
+  renderJudgments();
+  renderPresetList();
+}
+
+// ===== 初始化 =====
+loadState();
+initFilters();
+applyBg();
+initIconGrid();
+initSinColorGrid();
+applyFontScale();
+if (state.judgmentMode) setJudgmentMode(state.judgmentMode);
+document.getElementById('judgeC').classList.toggle('active', state.judgeC !== false);
+document.getElementById('judgeD').classList.toggle('active', state.judgeD !== false);
+renderAll();
+// 人格库面板作为 drop 区：把已编入的 slot 人格拖到此处即下场
+(function bindLibraryDrop() {
+  const lib = document.querySelector('.library-panel');
+  if (!lib || lib.dataset.dropBound) return;
+  lib.dataset.dropBound = '1';
+  lib.addEventListener('dragover', e => { e.preventDefault(); });
+  lib.addEventListener('drop', e => {
+    e.preventDefault();
+    const srcSlot = e.dataTransfer.getData('slotIndex');
+    if (srcSlot !== '') {
+      const src = parseInt(srcSlot);
+      if (src >= 0 && src < 12) {
+        state.team[src] = null;
+        saveState(); renderAll();
+      }
+    }
+  });
+})();
+// 初始化可搜索下拉框（必须在 renderAll 之后，确保所有 select 已渲染）
+initAllSearchableSelects();
+</script>
+</body>
+</html>
